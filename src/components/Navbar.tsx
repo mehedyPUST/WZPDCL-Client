@@ -51,6 +51,7 @@ const Navbar = () => {
             try {
                 const { data } = await authClient.getSession();
                 setUser(data?.user || null);
+                console.log('🔍 Navbar - User role:', data?.user?.role);
             } catch (error) {
                 console.error('Error fetching user:', error);
             } finally {
@@ -75,6 +76,20 @@ const Navbar = () => {
         return pathname?.startsWith(href);
     };
 
+    // ✅ Role-based dashboard path mapping
+    const getDashboardPath = (role: string) => {
+        const paths: Record<string, string> = {
+            admin: '/dashboard/admin',
+            xen: '/dashboard/xen',
+            connection_wing: '/dashboard/connection_wing',
+            complaint_manager: '/dashboard/complaint_manager',
+            billing_wings: '/dashboard/billing_wings',
+            consumer: '/dashboard/consumer',
+        };
+        return paths[role] || '/dashboard/consumer';
+    };
+
+    // ✅ Public navigation items
     const navItems: NavItem[] = [
         { id: 'home', label: 'Home', href: '/', icon: Home },
         {
@@ -146,6 +161,7 @@ const Navbar = () => {
         <nav className="bg-emerald-700 text-white shadow-lg sticky top-0 z-50">
             <div className="container mx-auto px-4">
                 <div className="flex justify-between items-center h-14">
+                    {/* Logo */}
                     <Link href="/" className="flex items-center space-x-2 flex-shrink-0">
                         <span className="text-xl font-bold">WZPDCL</span>
                         <span className="text-xs bg-yellow-400 text-emerald-900 px-2 py-0.5 rounded-full font-semibold hidden sm:inline">
@@ -153,6 +169,7 @@ const Navbar = () => {
                         </span>
                     </Link>
 
+                    {/* Mobile Menu Button */}
                     <button
                         onClick={() => setIsOpen(!isOpen)}
                         className="md:hidden p-2 rounded-lg hover:bg-emerald-600 transition-colors"
@@ -160,7 +177,7 @@ const Navbar = () => {
                         {isOpen ? <X size={24} /> : <Menu size={24} />}
                     </button>
 
-                    {/* Desktop Navigation */}
+                    {/* Desktop Navigation - Public Links */}
                     <div className="hidden md:flex items-center space-x-1">
                         {navItems.map((item) => {
                             const Icon = item.icon;
@@ -193,6 +210,7 @@ const Navbar = () => {
                                         </Link>
                                     )}
 
+                                    {/* Dropdown */}
                                     {hasChildren && item.children && (
                                         <div
                                             className={`absolute left-0 mt-1 w-56 bg-white rounded-lg shadow-xl py-2 text-gray-700 transition-all duration-200 ${dropdownOpen === item.id
@@ -221,7 +239,7 @@ const Navbar = () => {
                         })}
                     </div>
 
-                    {/* Auth Buttons - Desktop */}
+                    {/* ✅ Auth Buttons - Desktop with Role-Based Dashboard */}
                     <div className="hidden md:flex items-center space-x-3">
                         {!loading && !user ? (
                             <>
@@ -252,8 +270,9 @@ const Navbar = () => {
                                     </div>
                                 </div>
 
+                                {/* ✅ Role-Based Dashboard Link */}
                                 <Link
-                                    href="/dashboard"
+                                    href={getDashboardPath(user.role)}
                                     className="flex items-center space-x-1 px-3 py-2 rounded-lg hover:bg-emerald-600 transition-colors"
                                 >
                                     <LayoutDashboard size={18} />
@@ -362,8 +381,10 @@ const Navbar = () => {
                                             <p className="text-xs text-emerald-300">{getRoleDisplay(user.role)}</p>
                                         </div>
                                     </div>
+
+                                    {/* ✅ Role-Based Dashboard Link in Mobile Menu */}
                                     <Link
-                                        href="/dashboard"
+                                        href={getDashboardPath(user.role)}
                                         onClick={() => setIsOpen(false)}
                                         className="flex items-center space-x-2 px-4 py-3 hover:bg-emerald-600 rounded-lg transition-colors"
                                     >

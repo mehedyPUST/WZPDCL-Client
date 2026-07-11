@@ -18,14 +18,14 @@ export default function DashboardRedirectPage() {
                     return;
                 }
 
-                // ✅ Only consumer - no customer
+                // ✅ Role-based redirect mapping
                 const roleMap: Record<string, string> = {
                     admin: '/dashboard/admin',
                     xen: '/dashboard/xen',
                     connection_wing: '/dashboard/connection_wing',
                     complaint_manager: '/dashboard/complaint_manager',
                     billing_wings: '/dashboard/billing_wings',
-                    consumer: '/dashboard/consumer', // ✅ Only consumer
+                    consumer: '/dashboard/consumer',
                 };
 
                 const redirectPath = roleMap[data.user.role] || '/dashboard/consumer';

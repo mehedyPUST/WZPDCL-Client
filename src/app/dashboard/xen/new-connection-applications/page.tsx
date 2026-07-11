@@ -1,4 +1,4 @@
-// app/dashboard/xen/page.tsx
+// app/dashboard/xen/new-connection-applications/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -42,6 +42,8 @@ import {
     ThumbsUp,
     ThumbsDown,
     Clock as ClockIcon,
+    MessageSquare,
+    FileCheck,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -106,7 +108,7 @@ const StatCard = ({ title, value, icon, bgColor, change, trend }: StatCardProps)
     </div>
 );
 
-export default function XenDashboardPage() {
+export default function XenNewConnectionApplicationsPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [applications, setApplications] = useState<ConnectionApplication[]>([]);
@@ -118,6 +120,7 @@ export default function XenDashboardPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [filterType, setFilterType] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [stats, setStats] = useState({
         total: 0,
@@ -125,6 +128,7 @@ export default function XenDashboardPage() {
         approved: 0,
         rejected: 0,
         implemented: 0,
+        totalAmount: 0,
     });
     const [user, setUser] = useState<any>(null);
 
@@ -183,18 +187,19 @@ export default function XenDashboardPage() {
 
             // Update stats
             const total = filteredApps.length;
-            const pending = filteredApps.filter((a: ConnectionApplication) => a.status === 'payment_done').length;
-            const underReview = filteredApps.filter((a: ConnectionApplication) => a.status === 'under_xen_review').length;
+            const pending = filteredApps.filter((a: ConnectionApplication) => a.status === 'payment_done' || a.status === 'under_xen_review').length;
             const approved = filteredApps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
             const rejected = filteredApps.filter((a: ConnectionApplication) => a.status === 'rejected').length;
             const implemented = filteredApps.filter((a: ConnectionApplication) => a.status === 'implemented').length;
+            const totalAmount = filteredApps.reduce((sum, a) => sum + a.feeAmount, 0);
 
             setStats({
                 total,
-                pending: pending + underReview,
+                pending,
                 approved,
                 rejected,
                 implemented,
+                totalAmount,
             });
 
         } catch (error) {
@@ -203,18 +208,19 @@ export default function XenDashboardPage() {
             const mockApps = getMockApplications();
             setApplications(mockApps);
             const total = mockApps.length;
-            const pending = mockApps.filter((a: ConnectionApplication) => a.status === 'payment_done').length;
-            const underReview = mockApps.filter((a: ConnectionApplication) => a.status === 'under_xen_review').length;
+            const pending = mockApps.filter((a: ConnectionApplication) => a.status === 'payment_done' || a.status === 'under_xen_review').length;
             const approved = mockApps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
             const rejected = mockApps.filter((a: ConnectionApplication) => a.status === 'rejected').length;
             const implemented = mockApps.filter((a: ConnectionApplication) => a.status === 'implemented').length;
+            const totalAmount = mockApps.reduce((sum, a) => sum + a.feeAmount, 0);
 
             setStats({
                 total,
-                pending: pending + underReview,
+                pending,
                 approved,
                 rejected,
                 implemented,
+                totalAmount,
             });
         } finally {
             setLoading(false);
@@ -391,7 +397,6 @@ export default function XenDashboardPage() {
         try {
             const token = localStorage.getItem('auth_token');
 
-            // Determine new status
             let newStatus = '';
             if (reviewAction === 'approve') {
                 newStatus = 'forwarded_to_wing';
@@ -420,7 +425,6 @@ export default function XenDashboardPage() {
                 throw new Error(data.message || 'Failed to update status');
             }
 
-            // Refresh applications
             await fetchApplications();
 
             setShowReviewModal(false);
@@ -436,25 +440,14 @@ export default function XenDashboardPage() {
         }
     };
 
-    const getStatusBadgeForDetails = (status: string) => {
-        const statuses: Record<string, { color: string; label: string }> = {
-            pending_payment: { color: 'bg-yellow-100 text-yellow-700', label: 'Pending Payment' },
-            payment_done: { color: 'bg-blue-100 text-blue-700', label: 'Payment Done' },
-            under_xen_review: { color: 'bg-purple-100 text-purple-700', label: 'Under XEN Review' },
-            forwarded_to_wing: { color: 'bg-orange-100 text-orange-700', label: 'Forwarded to Wing' },
-            implemented: { color: 'bg-green-100 text-green-700', label: 'Implemented' },
-            rejected: { color: 'bg-red-100 text-red-700', label: 'Rejected' },
-        };
-        return statuses[status] || statuses.pending_payment;
-    };
-
     const filteredApplications = applications.filter(app => {
         const matchesSearch = app.applicationId.toLowerCase().includes(searchTerm.toLowerCase()) ||
             app.applicantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             app.mobile.includes(searchTerm) ||
             app.address.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesStatus = filterStatus === 'all' || app.status === filterStatus;
-        return matchesSearch && matchesStatus;
+        const matchesType = filterType === 'all' || app.connectionType === filterType;
+        return matchesSearch && matchesStatus && matchesType;
     });
 
     const totalPages = Math.ceil(filteredApplications.length / ITEMS_PER_PAGE);
@@ -468,7 +461,7 @@ export default function XenDashboardPage() {
         { title: 'Pending Review', value: stats.pending, icon: Clock, bgColor: 'bg-yellow-100', change: `${stats.pending} waiting`, trend: 'down' as const },
         { title: 'Approved', value: stats.approved, icon: ThumbsUp, bgColor: 'bg-green-100', change: `${stats.approved} forwarded`, trend: 'up' as const },
         { title: 'Rejected', value: stats.rejected, icon: ThumbsDown, bgColor: 'bg-red-100', change: `${stats.rejected} rejected`, trend: 'down' as const },
-        { title: 'Implemented', value: stats.implemented, icon: CheckCircle, bgColor: 'bg-emerald-100', change: `${stats.implemented} completed`, trend: 'up' as const },
+        { title: 'Total Amount', value: `৳${stats.totalAmount.toLocaleString()}`, icon: DollarSign, bgColor: 'bg-emerald-100', change: '', trend: 'neutral' as const },
     ];
 
     if (loading) {
@@ -485,8 +478,8 @@ export default function XenDashboardPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center space-x-2">
-                        <Zap size={24} className="text-emerald-600" />
-                        <span>XEN Dashboard</span>
+                        <FileText size={24} className="text-emerald-600" />
+                        <span>New Connection Applications</span>
                     </h1>
                     <p className="text-gray-500 text-sm">Review and manage new connection applications</p>
                 </div>
@@ -554,10 +547,21 @@ export default function XenDashboardPage() {
                             <option value="implemented">Implemented</option>
                             <option value="rejected">Rejected</option>
                         </select>
+                        <select
+                            value={filterType}
+                            onChange={(e) => setFilterType(e.target.value)}
+                            className="px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                        >
+                            <option value="all">All Types</option>
+                            <option value="residential">Residential</option>
+                            <option value="commercial">Commercial</option>
+                            <option value="industrial">Industrial</option>
+                        </select>
                         <button
                             onClick={() => {
                                 setSearchTerm('');
                                 setFilterStatus('all');
+                                setFilterType('all');
                             }}
                             className="px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
                         >
@@ -655,6 +659,9 @@ export default function XenDashboardPage() {
                                                     {app.status === 'forwarded_to_wing' && (
                                                         <span className="text-xs text-orange-600 font-medium">Forwarded</span>
                                                     )}
+                                                    {app.status === 'implemented' && (
+                                                        <span className="text-xs text-green-600 font-medium">✅ Implemented</span>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -750,10 +757,6 @@ export default function XenDashboardPage() {
                                 <p className="text-sm font-medium">{selectedApp.email}</p>
                             </div>
                             <div>
-                                <p className="text-xs text-gray-500">NID</p>
-                                <p className="text-sm font-medium">{selectedApp.nidNo}</p>
-                            </div>
-                            <div>
                                 <p className="text-xs text-gray-500">Load Required</p>
                                 <p className="text-sm font-medium">{selectedApp.loadRequired} kW</p>
                             </div>
@@ -768,10 +771,6 @@ export default function XenDashboardPage() {
                             <div>
                                 <p className="text-xs text-gray-500">Transformer</p>
                                 <p className="text-sm font-medium">{selectedApp.transformerNo || 'N/A'}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">Pole Number</p>
-                                <p className="text-sm font-medium">{selectedApp.poleNumber || 'N/A'}</p>
                             </div>
                             <div className="col-span-2">
                                 <p className="text-xs text-gray-500">Address</p>

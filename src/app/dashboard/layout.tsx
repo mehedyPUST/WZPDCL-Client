@@ -38,7 +38,7 @@ export default function DashboardLayout({
         getUser();
     }, [router]);
 
-    // ✅ Redirect to role-specific dashboard - Only consumer
+    // ✅ Redirect to role-specific dashboard - only if on /dashboard
     useEffect(() => {
         if (user && pathname === '/dashboard') {
             const roleMap: Record<string, string> = {
@@ -47,7 +47,7 @@ export default function DashboardLayout({
                 connection_wing: '/dashboard/connection_wing',
                 complaint_manager: '/dashboard/complaint_manager',
                 billing_wings: '/dashboard/billing_wings',
-                consumer: '/dashboard/consumer', // ✅ Only consumer
+                consumer: '/dashboard/consumer',
             };
             const redirectPath = roleMap[user.role] || '/dashboard/consumer';
             router.push(redirectPath);

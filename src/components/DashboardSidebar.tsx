@@ -22,8 +22,9 @@ import {
   BarChart3,
   MapPin,
   ClipboardList,
-  Home,
-  DollarSign,
+  ListChecks,
+  Send,
+  Activity,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -45,7 +46,7 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
     }
   };
 
-  // ✅ Navigation items based on role
+  // ✅ Role-based navigation items
   const getNavItems = () => {
     const roleItems: Record<string, any[]> = {
       admin: [
@@ -60,36 +61,35 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
         { href: '/dashboard/xen', label: 'Dashboard', icon: LayoutDashboard },
         { href: '/dashboard/xen/substations', label: 'Substations', icon: MapPin },
         { href: '/dashboard/xen/new-connection-applications', label: 'New Connections', icon: FileText },
-        { href: '/dashboard/xen/all-transactions', label: 'All Transactions', icon: AlertCircle },
-        { href: '/dashboard/xen/profile', label: 'Profile', icon: User },
+        { href: '/dashboard/xen/all-transactions', label: 'Transactions', icon: AlertCircle },
+        { href: '/dashboard/profile', label: 'Profile', icon: User },
       ],
       connection_wing: [
         { href: '/dashboard/connection_wing', label: 'Dashboard', icon: LayoutDashboard },
-        { href: '/dashboard/connection_wing/new-connections', label: 'New Connections', icon: Zap },
-        { href: '/dashboard/connection_wing/completed', label: 'Completed Connections', icon: CheckCircle },
+        { href: '/dashboard/connection_wing/applications', label: 'New Connections', icon: Zap },
+        { href: '/dashboard/connection_wing/completed', label: 'Completed', icon: CheckCircle },
         { href: '/dashboard/connection_wing/add-meter', label: 'Add Meter', icon: PlusCircle },
-        { href: '/dashboard/connection_wing/profile', label: 'Profile', icon: User },
+        { href: '/dashboard/profile', label: 'Profile', icon: User },
       ],
       complaint_manager: [
         { href: '/dashboard/complaint_manager', label: 'Dashboard', icon: LayoutDashboard },
-        { href: '/dashboard/complaint_manager/complaints/pending', label: 'Pending Complaints', icon: AlertCircle },
+        { href: '/dashboard/complaint_manager/complaints/pending', label: 'Pending', icon: AlertCircle },
         { href: '/dashboard/complaint_manager/complaints/all', label: 'All Complaints', icon: FileText },
-        { href: '/dashboard/complaint_manager/profile', label: 'Profile', icon: User },
+        { href: '/dashboard/profile', label: 'Profile', icon: User },
       ],
       billing_wings: [
         { href: '/dashboard/billing_wings', label: 'Dashboard', icon: LayoutDashboard },
         { href: '/dashboard/billing_wings/all-bills', label: 'All Bills', icon: ClipboardList },
         { href: '/dashboard/billing_wings/generate-bills', label: 'Generate Bills', icon: FileText },
-        { href: '/dashboard/billing_wings/profile', label: 'Profile', icon: User },
+        { href: '/dashboard/profile', label: 'Profile', icon: User },
       ],
-      // ✅ Consumer role - only one entry
       consumer: [
         { href: '/dashboard/consumer', label: 'Dashboard', icon: LayoutDashboard },
         { href: '/dashboard/consumer/my-bills', label: 'My Bills', icon: FileText },
         { href: '/dashboard/consumer/my-complaints', label: 'Complaints', icon: AlertCircle },
         { href: '/dashboard/consumer/new-connection', label: 'New Connection', icon: PlusCircle },
-        { href: '/dashboard/consumer/my-connections', label: 'My Connections', icon: PlusCircle },
-        { href: '/dashboard/consumer/profile', label: 'Profile', icon: User },
+        { href: '/dashboard/consumer/my-connections', label: 'My Connections', icon: ListChecks },
+        { href: '/dashboard/profile', label: 'Profile', icon: User },
       ],
     };
 
@@ -99,10 +99,16 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
   const navItems = getNavItems();
 
   const isActive = (href: string) => {
-    // ✅ Check for dashboard home pages
-    if (href === '/dashboard/admin' || href === '/dashboard/xen' ||
-      href === '/dashboard/connection_wing' || href === '/dashboard/complaint_manager' ||
-      href === '/dashboard/billing_wings' || href === '/dashboard/consumer') {
+    // ✅ Dashboard home pages
+    const homePages = [
+      '/dashboard/admin',
+      '/dashboard/xen',
+      '/dashboard/connection_wing',
+      '/dashboard/complaint_manager',
+      '/dashboard/billing_wings',
+      '/dashboard/consumer',
+    ];
+    if (homePages.includes(href)) {
       return pathname === href;
     }
     return pathname?.startsWith(href) || false;
