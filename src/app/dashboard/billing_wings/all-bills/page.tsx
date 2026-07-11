@@ -1,44 +1,37 @@
-// app/dashboard/billing_wings/page.tsx
+// app/dashboard/billing_wings/all-bills/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     FileText,
-    DollarSign,
-    TrendingUp,
-    TrendingDown,
-    Clock,
-    CheckCircle,
-    AlertCircle,
-    CreditCard,
-    Zap,
-    Users,
-    Calendar,
     Search,
     Eye,
     ChevronLeft,
     ChevronRight,
     RefreshCw,
     Loader2,
+    CheckCircle,
+    Clock,
+    XCircle,
+    AlertCircle,
+    CreditCard,
     Download,
     Printer,
-    Plus,
     Filter,
     X,
+    DollarSign,
+    Calendar,
+    User,
+    Home,
+    Building,
+    Package,
+    ArrowLeft,
+    TrendingUp,
+    TrendingDown,
     BarChart3,
     PieChart,
     Activity,
-    ArrowUpRight,
-    ArrowDownRight,
-    Building,
-    Home,
-    Package,
-    MapPin,
-    Send,
-    Check,
-    ListChecks,
-    Award,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -97,7 +90,7 @@ const StatCard = ({ title, value, icon, bgColor, change, trend }: StatCardProps)
     </div>
 );
 
-export default function BillingWingsDashboardPage() {
+export default function BillingWingsAllBillsPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [bills, setBills] = useState<Bill[]>([]);
@@ -106,20 +99,23 @@ export default function BillingWingsDashboardPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
     const [filterType, setFilterType] = useState('all');
+    const [filterMonth, setFilterMonth] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [stats, setStats] = useState({
         totalBills: 0,
         totalAmount: 0,
-        collectedAmount: 0,
-        pendingAmount: 0,
-        collectionRate: 0,
-        unpaidCount: 0,
+        paidAmount: 0,
+        unpaidAmount: 0,
         paidCount: 0,
+        unpaidCount: 0,
+        pendingCount: 0,
+        collectionRate: 0,
     });
     const [user, setUser] = useState<any>(null);
+    const [selectedBills, setSelectedBills] = useState<string[]>([]);
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-    const ITEMS_PER_PAGE = 5;
+    const ITEMS_PER_PAGE = 10;
 
     useEffect(() => {
         const getUser = async () => {
@@ -144,7 +140,7 @@ export default function BillingWingsDashboardPage() {
         try {
             const token = localStorage.getItem('auth_token');
             const response = await fetch(
-                `${API_URL}/api/billing/bills`,
+                `${API_URL}/api/billing/bills/all`,
                 {
                     headers: {
                         'Authorization': token ? `Bearer ${token}` : '',
@@ -179,128 +175,81 @@ export default function BillingWingsDashboardPage() {
     };
 
     const getMockBills = (): Bill[] => {
-        return [
-            {
-                billId: 'B-2026-001',
-                meterNo: 'MTR-2026-001',
-                consumerName: 'John Doe',
-                billingMonth: 'June 2026',
-                consumerType: 'residential',
-                previousReading: 1245,
-                currentReading: 1590,
-                unitsConsumed: 345,
-                ratePerUnit: 7.50,
-                totalAmount: 2587.50,
-                dueDate: '2026-07-15',
-                status: 'paid',
-                paidAt: '2026-07-01 10:30 AM',
-                paymentMethod: 'Stripe',
-                lateFee: 0,
-                vatAmount: 0,
-                createdAt: '2026-07-01 09:00 AM',
-                updatedAt: '2026-07-01 10:30 AM',
-            },
-            {
-                billId: 'B-2026-002',
-                meterNo: 'MTR-2026-002',
-                consumerName: 'Jane Smith',
-                billingMonth: 'June 2026',
-                consumerType: 'commercial',
-                previousReading: 980,
-                currentReading: 1490,
-                unitsConsumed: 510,
-                ratePerUnit: 9.75,
-                totalAmount: 4972.50,
-                dueDate: '2026-07-15',
-                status: 'unpaid',
-                lateFee: 248.63,
-                vatAmount: 0,
-                createdAt: '2026-07-01 09:00 AM',
-                updatedAt: '2026-07-01 09:00 AM',
-            },
-            {
-                billId: 'B-2026-003',
-                meterNo: 'MTR-2026-003',
-                consumerName: 'Robert Johnson',
-                billingMonth: 'June 2026',
-                consumerType: 'industrial',
-                previousReading: 1500,
-                currentReading: 2150,
-                unitsConsumed: 650,
-                ratePerUnit: 11.25,
-                totalAmount: 7312.50,
-                dueDate: '2026-07-15',
-                status: 'pending',
-                lateFee: 0,
-                vatAmount: 0,
-                createdAt: '2026-07-01 09:00 AM',
-                updatedAt: '2026-07-01 09:00 AM',
-            },
-            {
-                billId: 'B-2026-004',
-                meterNo: 'MTR-2026-004',
-                consumerName: 'Emily Davis',
-                billingMonth: 'May 2026',
-                consumerType: 'residential',
-                previousReading: 720,
-                currentReading: 980,
-                unitsConsumed: 260,
-                ratePerUnit: 7.50,
-                totalAmount: 1950.00,
-                dueDate: '2026-06-15',
-                status: 'paid',
-                paidAt: '2026-06-12 02:15 PM',
-                paymentMethod: 'Stripe',
-                lateFee: 0,
-                vatAmount: 0,
-                createdAt: '2026-06-01 09:00 AM',
-                updatedAt: '2026-06-12 02:15 PM',
-            },
-            {
-                billId: 'B-2026-005',
-                meterNo: 'MTR-2026-005',
-                consumerName: 'Michael Brown',
-                billingMonth: 'May 2026',
-                consumerType: 'commercial',
-                previousReading: 450,
-                currentReading: 820,
-                unitsConsumed: 370,
-                ratePerUnit: 9.75,
-                totalAmount: 3607.50,
-                dueDate: '2026-06-15',
-                status: 'unpaid',
-                lateFee: 180.38,
-                vatAmount: 0,
-                createdAt: '2026-06-01 09:00 AM',
-                updatedAt: '2026-06-01 09:00 AM',
-            },
+        const months = ['June 2026', 'May 2026', 'April 2026', 'March 2026', 'February 2026', 'January 2026'];
+        const consumers = [
+            { name: 'John Doe', meter: 'MTR-2026-001', type: 'residential' },
+            { name: 'Jane Smith', meter: 'MTR-2026-002', type: 'commercial' },
+            { name: 'Robert Johnson', meter: 'MTR-2026-003', type: 'industrial' },
+            { name: 'Emily Davis', meter: 'MTR-2026-004', type: 'residential' },
+            { name: 'Michael Brown', meter: 'MTR-2026-005', type: 'commercial' },
+            { name: 'Sarah Wilson', meter: 'MTR-2026-006', type: 'residential' },
+            { name: 'David Lee', meter: 'MTR-2026-007', type: 'commercial' },
+            { name: 'Lisa Kim', meter: 'MTR-2026-008', type: 'industrial' },
+            { name: 'James Taylor', meter: 'MTR-2026-009', type: 'residential' },
+            { name: 'Maria Garcia', meter: 'MTR-2026-010', type: 'commercial' },
         ];
+
+        const statuses: ('paid' | 'unpaid' | 'pending')[] = ['paid', 'unpaid', 'pending'];
+        const rates = { residential: 7.50, commercial: 9.75, industrial: 11.25 };
+
+        return consumers.map((consumer, index) => {
+            const monthIndex = Math.floor(Math.random() * months.length);
+            const status = statuses[Math.floor(Math.random() * statuses.length)];
+            const previousReading = Math.floor(Math.random() * 1000) + 500;
+            const currentReading = previousReading + Math.floor(Math.random() * 300) + 100;
+            const units = currentReading - previousReading;
+            const rate = rates[consumer.type as keyof typeof rates];
+            const amount = units * rate;
+
+            return {
+                billId: `B-2026-${String(index + 1).padStart(3, '0')}`,
+                meterNo: consumer.meter,
+                consumerName: consumer.name,
+                billingMonth: months[monthIndex],
+                consumerType: consumer.type as 'residential' | 'commercial' | 'industrial',
+                previousReading,
+                currentReading,
+                unitsConsumed: units,
+                ratePerUnit: rate,
+                totalAmount: amount,
+                dueDate: `2026-${String(monthIndex + 1).padStart(2, '0')}-15`,
+                status: status,
+                paidAt: status === 'paid' ? '2026-07-01 10:30 AM' : undefined,
+                paymentMethod: status === 'paid' ? 'Stripe' : undefined,
+                lateFee: status === 'unpaid' ? amount * 0.05 : 0,
+                vatAmount: 0,
+                createdAt: '2026-07-01 09:00 AM',
+                updatedAt: '2026-07-01 09:00 AM',
+            };
+        });
     };
 
     const updateStats = (billsData: Bill[]) => {
         const total = billsData.length;
         const totalAmount = billsData.reduce((sum, b) => sum + b.totalAmount, 0);
-        const collectedAmount = billsData.filter(b => b.status === 'paid').reduce((sum, b) => sum + b.totalAmount, 0);
-        const pendingAmount = billsData.filter(b => b.status === 'unpaid' || b.status === 'pending').reduce((sum, b) => sum + b.totalAmount, 0);
-        const collectionRate = totalAmount > 0 ? (collectedAmount / totalAmount) * 100 : 0;
+        const paidAmount = billsData.filter(b => b.status === 'paid').reduce((sum, b) => sum + b.totalAmount, 0);
+        const unpaidAmount = billsData.filter(b => b.status === 'unpaid').reduce((sum, b) => sum + b.totalAmount, 0);
         const paidCount = billsData.filter(b => b.status === 'paid').length;
-        const unpaidCount = billsData.filter(b => b.status === 'unpaid' || b.status === 'pending').length;
+        const unpaidCount = billsData.filter(b => b.status === 'unpaid').length;
+        const pendingCount = billsData.filter(b => b.status === 'pending').length;
+        const collectionRate = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0;
 
         setStats({
             totalBills: total,
             totalAmount,
-            collectedAmount,
-            pendingAmount,
-            collectionRate,
-            unpaidCount,
+            paidAmount,
+            unpaidAmount,
             paidCount,
+            unpaidCount,
+            pendingCount,
+            collectionRate,
         });
     };
 
     const getStatusBadge = (status: string) => {
         const statuses: Record<string, { color: string; label: string; icon: any }> = {
             paid: { color: 'bg-green-100 text-green-700', label: 'Paid', icon: CheckCircle },
-            unpaid: { color: 'bg-red-100 text-red-700', label: 'Unpaid', icon: AlertCircle },
+            unpaid: { color: 'bg-red-100 text-red-700', label: 'Unpaid', icon: XCircle },
             pending: { color: 'bg-yellow-100 text-yellow-700', label: 'Pending', icon: Clock },
         };
         return statuses[status] || statuses.pending;
@@ -315,13 +264,44 @@ export default function BillingWingsDashboardPage() {
         return types[type] || type;
     };
 
+    const getConsumerTypeColor = (type: string) => {
+        const colors: Record<string, string> = {
+            residential: 'bg-blue-100 text-blue-700',
+            commercial: 'bg-purple-100 text-purple-700',
+            industrial: 'bg-orange-100 text-orange-700',
+        };
+        return colors[type] || 'bg-gray-100 text-gray-700';
+    };
+
+    const getUniqueMonths = () => {
+        const months = bills.map(b => b.billingMonth);
+        return ['all', ...new Set(months)];
+    };
+
+    const toggleSelectBill = (billId: string) => {
+        setSelectedBills(prev =>
+            prev.includes(billId)
+                ? prev.filter(id => id !== billId)
+                : [...prev, billId]
+        );
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedBills.length === paginatedBills.length) {
+            setSelectedBills([]);
+        } else {
+            setSelectedBills(paginatedBills.map(b => b.billId));
+        }
+    };
+
     const filteredBills = bills.filter(bill => {
         const matchesSearch = bill.billId.toLowerCase().includes(searchTerm.toLowerCase()) ||
             bill.consumerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             bill.meterNo.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesStatus = filterStatus === 'all' || bill.status === filterStatus;
         const matchesType = filterType === 'all' || bill.consumerType === filterType;
-        return matchesSearch && matchesStatus && matchesType;
+        const matchesMonth = filterMonth === 'all' || bill.billingMonth === filterMonth;
+        return matchesSearch && matchesStatus && matchesType && matchesMonth;
     });
 
     const totalPages = Math.ceil(filteredBills.length / ITEMS_PER_PAGE);
@@ -330,11 +310,13 @@ export default function BillingWingsDashboardPage() {
         currentPage * ITEMS_PER_PAGE
     );
 
+    const months = getUniqueMonths();
+
     const statCards = [
         { title: 'Total Bills', value: stats.totalBills, icon: FileText, bgColor: 'bg-blue-100', change: '', trend: 'neutral' as const },
         { title: 'Total Amount', value: `৳${stats.totalAmount.toLocaleString()}`, icon: DollarSign, bgColor: 'bg-emerald-100', change: '', trend: 'neutral' as const },
-        { title: 'Collected', value: `৳${stats.collectedAmount.toLocaleString()}`, icon: CheckCircle, bgColor: 'bg-green-100', change: `${stats.collectionRate.toFixed(1)}% rate`, trend: 'up' as const },
-        { title: 'Pending', value: `৳${stats.pendingAmount.toLocaleString()}`, icon: Clock, bgColor: 'bg-yellow-100', change: `${stats.unpaidCount} pending`, trend: 'down' as const },
+        { title: 'Collection Rate', value: `${stats.collectionRate.toFixed(1)}%`, icon: TrendingUp, bgColor: 'bg-green-100', change: `${stats.paidCount} paid`, trend: 'up' as const },
+        { title: 'Unpaid', value: stats.unpaidCount, icon: AlertCircle, bgColor: 'bg-red-100', change: `৳${stats.unpaidAmount.toLocaleString()}`, trend: 'down' as const },
     ];
 
     if (loading) {
@@ -351,10 +333,10 @@ export default function BillingWingsDashboardPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center space-x-2">
-                        <DollarSign size={24} className="text-emerald-600" />
-                        <span>Billing Dashboard</span>
+                        <FileText size={24} className="text-emerald-600" />
+                        <span>All Bills</span>
                     </h1>
-                    <p className="text-gray-500 text-sm">Manage bills, collections, and generate new bills</p>
+                    <p className="text-gray-500 text-sm">View and manage all consumer bills</p>
                 </div>
                 <div className="flex items-center space-x-3">
                     <button
@@ -364,16 +346,16 @@ export default function BillingWingsDashboardPage() {
                         <RefreshCw size={16} />
                         <span>Refresh</span>
                     </button>
-                    <button
-                        onClick={() => router.push('/dashboard/billing_wings/generate-bills')}
-                        className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-2"
-                    >
-                        <Plus size={16} />
-                        <span>Generate Bills</span>
-                    </button>
                     <button className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2">
                         <Download size={16} />
                         <span>Export</span>
+                    </button>
+                    <button
+                        onClick={() => router.push('/dashboard/billing_wings')}
+                        className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-2"
+                    >
+                        <ArrowLeft size={16} />
+                        <span>Back</span>
                     </button>
                 </div>
             </div>
@@ -432,11 +414,22 @@ export default function BillingWingsDashboardPage() {
                             <option value="commercial">Commercial</option>
                             <option value="industrial">Industrial</option>
                         </select>
+                        <select
+                            value={filterMonth}
+                            onChange={(e) => setFilterMonth(e.target.value)}
+                            className="px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                        >
+                            <option value="all">All Months</option>
+                            {months.filter(m => m !== 'all').map((month) => (
+                                <option key={month} value={month}>{month}</option>
+                            ))}
+                        </select>
                         <button
                             onClick={() => {
                                 setSearchTerm('');
                                 setFilterStatus('all');
                                 setFilterType('all');
+                                setFilterMonth('all');
                             }}
                             className="px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
                         >
@@ -447,16 +440,42 @@ export default function BillingWingsDashboardPage() {
                 </div>
             </div>
 
+            {/* Bulk Actions */}
+            {selectedBills.length > 0 && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-center justify-between">
+                    <p className="text-sm text-emerald-700">
+                        {selectedBills.length} bill{selectedBills.length > 1 ? 's' : ''} selected
+                    </p>
+                    <div className="flex items-center space-x-2">
+                        <button className="px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 transition-colors">
+                            Download Selected
+                        </button>
+                        <button className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors">
+                            Delete Selected
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Bills Table */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full">
                         <thead className="bg-gray-50 border-b">
                             <tr>
+                                <th className="px-4 py-3 w-10">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedBills.length === paginatedBills.length && paginatedBills.length > 0}
+                                        onChange={toggleSelectAll}
+                                        className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                                    />
+                                </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bill ID</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Consumer</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meter</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Month</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
@@ -465,7 +484,7 @@ export default function BillingWingsDashboardPage() {
                         <tbody className="divide-y divide-gray-100">
                             {paginatedBills.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                                    <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                                         No bills found.
                                     </td>
                                 </tr>
@@ -476,6 +495,14 @@ export default function BillingWingsDashboardPage() {
 
                                     return (
                                         <tr key={bill.billId} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-4 py-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedBills.includes(bill.billId)}
+                                                    onChange={() => toggleSelectBill(bill.billId)}
+                                                    className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                                                />
+                                            </td>
                                             <td className="px-6 py-4">
                                                 <span className="text-sm font-medium text-gray-800">{bill.billId}</span>
                                             </td>
@@ -487,6 +514,11 @@ export default function BillingWingsDashboardPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className="text-sm text-gray-600">{bill.billingMonth}</span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getConsumerTypeColor(bill.consumerType)}`}>
+                                                    {getConsumerTypeLabel(bill.consumerType)}
+                                                </span>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`text-sm font-medium ${bill.status === 'unpaid' ? 'text-red-600' : 'text-gray-800'
@@ -556,55 +588,6 @@ export default function BillingWingsDashboardPage() {
                         </div>
                     </div>
                 )}
-            </div>
-
-            {/* Quick Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-xl p-6 text-white">
-                    <h3 className="text-lg font-semibold">Quick Actions</h3>
-                    <p className="text-sm text-emerald-100 mt-1">Common billing tasks</p>
-                    <div className="mt-4 space-y-2">
-                        <button
-                            onClick={() => router.push('/dashboard/billing_wings/generate-bills')}
-                            className="w-full text-left px-4 py-2.5 bg-emerald-500/30 hover:bg-emerald-500/50 rounded-lg transition-colors flex items-center space-x-3"
-                        >
-                            <Plus size={18} />
-                            <span className="text-sm">Generate Monthly Bills</span>
-                        </button>
-                        <button className="w-full text-left px-4 py-2.5 bg-emerald-500/30 hover:bg-emerald-500/50 rounded-lg transition-colors flex items-center space-x-3">
-                            <FileText size={18} />
-                            <span className="text-sm">View All Bills</span>
-                        </button>
-                        <button className="w-full text-left px-4 py-2.5 bg-emerald-500/30 hover:bg-emerald-500/50 rounded-lg transition-colors flex items-center space-x-3">
-                            <Download size={18} />
-                            <span className="text-sm">Export Collection Report</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div className="md:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h3 className="font-semibold text-gray-800 mb-4">Collection Summary</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="bg-gray-50 rounded-lg p-4 text-center">
-                            <p className="text-2xl font-bold text-emerald-600">
-                                {stats.collectionRate.toFixed(1)}%
-                            </p>
-                            <p className="text-xs text-gray-500">Collection Rate</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-4 text-center">
-                            <p className="text-2xl font-bold text-green-600">
-                                ৳{stats.collectedAmount.toLocaleString()}
-                            </p>
-                            <p className="text-xs text-gray-500">Collected</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-lg p-4 text-center">
-                            <p className="text-2xl font-bold text-red-600">
-                                ৳{stats.pendingAmount.toLocaleString()}
-                            </p>
-                            <p className="text-xs text-gray-500">Pending</p>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             {/* Details Modal */}

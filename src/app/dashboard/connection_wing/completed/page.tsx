@@ -7,8 +7,6 @@ import {
     CheckCircle,
     FileText,
     Clock,
-    Users,
-    MapPin,
     Search,
     Eye,
     ChevronLeft,
@@ -32,8 +30,8 @@ import {
     ListChecks,
     Zap,
     Award,
-    Check,
     Filter,
+    AlertCircle,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -107,6 +105,7 @@ export default function ConnectionWingCompletedPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
+    const [error, setError] = useState<string | null>(null);
     const [stats, setStats] = useState({
         total: 0,
         residential: 0,
@@ -137,31 +136,50 @@ export default function ConnectionWingCompletedPage() {
         }
     }, [user]);
 
+    // app/dashboard/connection_wing/completed/page.tsx - Updated fetch function
+
     const fetchCompletedApplications = async () => {
         setLoading(true);
+        setError(null);
         try {
             const token = localStorage.getItem('auth_token');
+
+            console.log('🔍 Fetching applications from API...');
+
             const response = await fetch(
                 `${API_URL}/api/connection-wing/applications`,
                 {
                     headers: {
                         'Authorization': token ? `Bearer ${token}` : '',
+                        'Content-Type': 'application/json',
                     },
                 }
             );
 
-            const data = await response.json();
+            console.log('📦 Response status:', response.status);
 
             if (!response.ok) {
-                throw new Error(data.message || 'Failed to fetch applications');
+                const errorData = await response.json();
+                console.error('❌ API Error:', errorData);
+                throw new Error(errorData.message || 'Failed to fetch applications');
             }
 
-            const apps = data.data || [];
+            const data = await response.json();
+            console.log('📦 Full API Response:', data);
+            console.log('📦 Number of applications:', data.data?.length || 0);
+
+            const allApps = data.data || [];
+
+            // ✅ Log all statuses to see what's available
+            const statuses = allApps.map((a: any) => a.status);
+            console.log('📊 All statuses:', [...new Set(statuses)]);
 
             // ✅ Filter: Only show implemented and connection_completed
-            const filtered = apps.filter((a: any) =>
+            const filtered = allApps.filter((a: any) =>
                 a.status === 'implemented' || a.status === 'connection_completed'
             );
+
+            console.log('✅ Filtered applications:', filtered.length);
 
             setCompletedApps(filtered);
 
@@ -170,7 +188,7 @@ export default function ConnectionWingCompletedPage() {
             const residential = filtered.filter((a: any) => a.connectionType === 'residential').length;
             const commercial = filtered.filter((a: any) => a.connectionType === 'commercial').length;
             const industrial = filtered.filter((a: any) => a.connectionType === 'industrial').length;
-            const totalLoad = filtered.reduce((sum: number, a: any) => sum + a.loadRequired, 0);
+            const totalLoad = filtered.reduce((sum: number, a: any) => sum + (a.loadRequired || 0), 0);
 
             setStats({
                 total,
@@ -180,162 +198,20 @@ export default function ConnectionWingCompletedPage() {
                 totalLoad,
             });
 
-        } catch (error) {
-            console.error('Error fetching completed applications:', error);
-            // Mock data
-            const mockApps = getMockCompletedApplications();
-            setCompletedApps(mockApps);
-            const total = mockApps.length;
-            const residential = mockApps.filter((a: any) => a.connectionType === 'residential').length;
-            const commercial = mockApps.filter((a: any) => a.connectionType === 'commercial').length;
-            const industrial = mockApps.filter((a: any) => a.connectionType === 'industrial').length;
-            const totalLoad = mockApps.reduce((sum: number, a: any) => sum + a.loadRequired, 0);
-
+        } catch (error: any) {
+            console.error('❌ Error fetching completed applications:', error);
+            setError(error.message || 'Failed to load completed applications');
+            setCompletedApps([]);
             setStats({
-                total,
-                residential,
-                commercial,
-                industrial,
-                totalLoad,
+                total: 0,
+                residential: 0,
+                commercial: 0,
+                industrial: 0,
+                totalLoad: 0,
             });
         } finally {
             setLoading(false);
         }
-    };
-
-    const getMockCompletedApplications = (): CompletedApplication[] => {
-        return [
-            {
-                applicationId: 'APP-2026-8838',
-                applicantName: 'Ms. Nasrin Akter',
-                email: 'nasrin@example.com',
-                mobile: '01712345681',
-                nidNo: '12345678901234570',
-                address: 'House #20, N.S-Road, Kushtia',
-                connectionType: 'residential',
-                loadRequired: 3,
-                voltageLevel: '220',
-                purpose: 'New apartment',
-                feederName: 'N.S-Road',
-                transformerNo: 'TR-05',
-                poleNumber: 'P-321',
-                nearestLandmark: 'Near N.S-Road Market',
-                consumerId: 'user126',
-                status: 'implemented',
-                paymentStatus: 'paid',
-                feeAmount: 5000,
-                assignedMeterNo: 'MTR-2026-011',
-                implementedAt: '2026-07-10T08:00:00Z',
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: 'Connection completed successfully.',
-                createdAt: '2026-07-05T16:45:00Z',
-                updatedAt: '2026-07-10T08:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8840',
-                applicantName: 'Md. Abdur Rahman',
-                email: 'rahman@example.com',
-                mobile: '01712345683',
-                nidNo: '12345678901234572',
-                address: 'Plot #15, Trimohoni, Kushtia',
-                connectionType: 'commercial',
-                loadRequired: 12,
-                voltageLevel: '380',
-                purpose: 'Grocery store',
-                feederName: 'Trimohoni',
-                transformerNo: 'TR-01',
-                poleNumber: 'P-111',
-                nearestLandmark: 'Near Trimohoni Market',
-                consumerId: 'user128',
-                status: 'implemented',
-                paymentStatus: 'paid',
-                feeAmount: 10000,
-                assignedMeterNo: 'MTR-2026-012',
-                implementedAt: '2026-07-09T10:30:00Z',
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: 'Meter installed and connection active.',
-                createdAt: '2026-07-06T09:00:00Z',
-                updatedAt: '2026-07-09T10:30:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8841',
-                applicantName: 'Ms. Salma Khatun',
-                email: 'salma@example.com',
-                mobile: '01712345684',
-                nidNo: '12345678901234573',
-                address: 'House #7, Circuit-Hose, Kushtia',
-                connectionType: 'residential',
-                loadRequired: 4,
-                voltageLevel: '220',
-                purpose: 'New house',
-                feederName: 'Circuit-Hose',
-                transformerNo: 'TR-03',
-                poleNumber: 'P-222',
-                nearestLandmark: 'Opposite Circuit-Hose School',
-                consumerId: 'user129',
-                status: 'connection_completed',
-                paymentStatus: 'paid',
-                feeAmount: 5000,
-                assignedMeterNo: 'MTR-2026-013',
-                implementedAt: '2026-07-08T14:00:00Z',
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: 'Connection completed, meter pending assignment.',
-                createdAt: '2026-07-07T10:00:00Z',
-                updatedAt: '2026-07-08T14:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8842',
-                applicantName: 'Md. Abul Kalam',
-                email: 'kalam@example.com',
-                mobile: '01712345685',
-                nidNo: '12345678901234574',
-                address: 'Plot #5, DC-Court, Kushtia',
-                connectionType: 'industrial',
-                loadRequired: 25,
-                voltageLevel: '11000',
-                purpose: 'Rice mill',
-                feederName: 'DC-Court',
-                transformerNo: 'TR-02',
-                poleNumber: 'P-333',
-                nearestLandmark: 'Near DC-Court Bridge',
-                consumerId: 'user130',
-                status: 'implemented',
-                paymentStatus: 'paid',
-                feeAmount: 15000,
-                assignedMeterNo: 'MTR-2026-014',
-                implementedAt: '2026-07-07T11:30:00Z',
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: 'Industrial connection completed successfully.',
-                createdAt: '2026-07-01T08:00:00Z',
-                updatedAt: '2026-07-07T11:30:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8843',
-                applicantName: 'Ms. Jannatul Ferdous',
-                email: 'jannat@example.com',
-                mobile: '01712345686',
-                nidNo: '12345678901234575',
-                address: 'House #3, N.S-Road, Kushtia',
-                connectionType: 'commercial',
-                loadRequired: 8,
-                voltageLevel: '380',
-                purpose: 'Beauty salon',
-                feederName: 'N.S-Road',
-                transformerNo: 'TR-05',
-                poleNumber: 'P-444',
-                nearestLandmark: 'Near N.S-Road Park',
-                consumerId: 'user131',
-                status: 'implemented',
-                paymentStatus: 'paid',
-                feeAmount: 10000,
-                assignedMeterNo: 'MTR-2026-015',
-                implementedAt: '2026-07-06T09:00:00Z',
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: 'Commercial connection active.',
-                createdAt: '2026-07-03T12:00:00Z',
-                updatedAt: '2026-07-06T09:00:00Z',
-            },
-        ];
     };
 
     const getStatusBadge = (status: string) => {
@@ -365,10 +241,10 @@ export default function ConnectionWingCompletedPage() {
     };
 
     const filteredApps = completedApps.filter(app => {
-        const matchesSearch = app.applicationId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            app.applicantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            app.mobile.includes(searchTerm) ||
-            app.assignedMeterNo.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = app.applicationId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            app.applicantName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            app.mobile?.includes(searchTerm) ||
+            app.assignedMeterNo?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesType = filterType === 'all' || app.connectionType === filterType;
         return matchesSearch && matchesType;
     });
@@ -394,6 +270,37 @@ export default function ConnectionWingCompletedPage() {
         );
     }
 
+    if (error) {
+        return (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+                <AlertCircle size={40} className="text-red-500 mx-auto mb-2" />
+                <p className="text-red-600">{error}</p>
+                <button
+                    onClick={fetchCompletedApplications}
+                    className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                    Try Again
+                </button>
+            </div>
+        );
+    }
+
+    if (completedApps.length === 0 && !loading) {
+        return (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
+                <Award size={48} className="text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-700">No Completed Connections</h3>
+                <p className="text-gray-500 mt-2">There are no completed connections yet.</p>
+                <button
+                    onClick={() => router.push('/dashboard/connection_wing/applications')}
+                    className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                    View Pending Applications
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             {/* Page Header */}
@@ -414,11 +321,11 @@ export default function ConnectionWingCompletedPage() {
                         <span>Refresh</span>
                     </button>
                     <button
-                        onClick={() => router.push('/dashboard/connection_wing/applications')}
+                        onClick={() => router.push('/dashboard/connection_wing')}
                         className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-2"
                     >
                         <ArrowLeft size={16} />
-                        <span>Back to Applications</span>
+                        <span>Back</span>
                     </button>
                 </div>
             </div>
@@ -695,12 +602,7 @@ export default function ConnectionWingCompletedPage() {
                         </div>
 
                         <div className="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-100">
-                            <button
-                                onClick={() => {
-                                    window.open(`/dashboard/connection_wing/certificate/${selectedApp.applicationId}`, '_blank');
-                                }}
-                                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
-                            >
+                            <button className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2">
                                 <Printer size={16} />
                                 <span>Print Certificate</span>
                             </button>
