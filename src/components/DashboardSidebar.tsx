@@ -25,6 +25,9 @@ import {
   ListChecks,
   Send,
   Activity,
+  DollarSign,
+  Package,
+  Edit,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -46,7 +49,6 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
     }
   };
 
-  // ✅ Role-based navigation items
   const getNavItems = () => {
     const roleItems: Record<string, any[]> = {
       admin: [
@@ -69,7 +71,9 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
         { href: '/dashboard/connection_wing', label: 'Dashboard', icon: LayoutDashboard },
         { href: '/dashboard/connection_wing/applications', label: 'New Connections', icon: Zap },
         { href: '/dashboard/connection_wing/completed', label: 'Completed', icon: CheckCircle },
-        { href: '/dashboard/connection_wing/add-meter', label: 'Add Meter', icon: PlusCircle },
+        { href: '/dashboard/connection_wing/all-consumers', label: 'All Consumers', icon: Users },
+        { href: '/dashboard/connection_wing/add-consumer', label: 'Add Consumer', icon: Users },
+        { href: '/dashboard/connection_wing/add-meter', label: 'Add Meter', icon: Users },
         { href: '/dashboard/connection_wing/profile', label: 'Profile', icon: User },
       ],
       complaint_manager: [
@@ -81,8 +85,8 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
       billing_wings: [
         { href: '/dashboard/billing_wings', label: 'Dashboard', icon: LayoutDashboard },
         { href: '/dashboard/billing_wings/all-bills', label: 'All Bills', icon: ClipboardList },
-        { href: '/dashboard/billing_wings/all-consumers', label: 'All Consumers', icon: FileText },
-        { href: '/dashboard/billing_wings/generate-bills', label: 'Generate Bills', icon: FileText },
+        { href: '/dashboard/billing_wings/all-consumers', label: 'All Consumers', icon: Users },
+        { href: '/dashboard/billing_wings/generate-bills', label: 'Generate Bills', icon: DollarSign },
         { href: '/dashboard/billing_wings/profile', label: 'Profile', icon: User },
       ],
       consumer: [
@@ -91,6 +95,7 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
         { href: '/dashboard/consumer/my-complaints', label: 'Complaints', icon: AlertCircle },
         { href: '/dashboard/consumer/new-connection', label: 'New Connection', icon: PlusCircle },
         { href: '/dashboard/consumer/my-connections', label: 'My Connections', icon: ListChecks },
+        { href: '/dashboard/consumer/my-meters', label: 'My Meters', icon: ListChecks },
         { href: '/dashboard/consumer/profile', label: 'Profile', icon: User },
       ],
     };
@@ -101,7 +106,6 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
   const navItems = getNavItems();
 
   const isActive = (href: string) => {
-    // ✅ Dashboard home pages
     const homePages = [
       '/dashboard/admin',
       '/dashboard/xen',
@@ -118,7 +122,6 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
 
   return (
     <>
-      {/* Mobile overlay */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -126,12 +129,10 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={`fixed top-0 left-0 h-full bg-emerald-800 text-white z-50 transition-all duration-300 flex flex-col ${isOpen ? 'w-64' : 'w-20'
           }`}
       >
-        {/* Logo */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-emerald-700">
           <Link href="/" className="flex items-center space-x-2 overflow-hidden">
             <span className="text-2xl font-bold whitespace-nowrap">WZPDCL</span>
@@ -149,7 +150,6 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
           </button>
         </div>
 
-        {/* User Info */}
         <div className={`p-4 border-b border-emerald-700 ${!isOpen && 'text-center'}`}>
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0">
@@ -167,7 +167,6 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -189,7 +188,6 @@ export default function DashboardSidebar({ user, isOpen, setIsOpen, pathname }: 
           })}
         </nav>
 
-        {/* Logout */}
         <div className="p-4 border-t border-emerald-700">
           <button
             onClick={handleLogout}

@@ -1,4 +1,4 @@
-// app/dashboard/billing_wings/all-consumers/page.tsx
+// app/dashboard/connection_wing/all-consumers/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -38,6 +38,9 @@ import {
     UserPlus,
     Shield,
     ClipboardCheck,
+    List,
+    ChevronDown,
+    ChevronUp,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -52,20 +55,23 @@ interface Consumer {
     meterNo: string;
     feederName: string;
     consumerType: 'residential' | 'commercial' | 'industrial';
-    userType: 'existing_consumer' | 'applicant_new_connection';
-    role: string;
     isActive: boolean;
+    isClaimed: boolean;
+    isRegistered: boolean;
+    claimedBy?: string;
+    claimedAt?: string;
+    registeredBy?: string;
+    registeredAt?: string;
+    userId?: string;
+    createdAt: string;
+    updatedAt: string;
     totalBills?: number;
     totalPaid?: number;
     totalDue?: number;
-    lastPaymentDate?: string;
-    createdAt: string;
-    updatedAt: string;
-    isClaimed?: boolean;
-    isRegistered?: boolean;
-    claimedBy?: string;
-    registeredBy?: string;
     status?: string;
+    // ✅ Multiple meters support
+    meters?: string[];
+    meterDetails?: any[];
 }
 
 interface StatusBadge {
@@ -74,7 +80,7 @@ interface StatusBadge {
     icon: any;
 }
 
-export default function BillingWingsAllConsumersPage() {
+export default function ConnectionWingAllConsumersPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -97,9 +103,11 @@ export default function BillingWingsAllConsumersPage() {
         unclaimed: 0,
         registered: 0,
         pending: 0,
+        totalMeters: 0,
     });
     const [user, setUser] = useState<any>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [expandedConsumer, setExpandedConsumer] = useState<string | null>(null);
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
     const ITEMS_PER_PAGE = 10;
@@ -128,7 +136,6 @@ export default function BillingWingsAllConsumersPage() {
         try {
             const token = localStorage.getItem('auth_token');
 
-            // ✅ Fetch from consumers collection
             const response = await fetch(
                 `${API_URL}/api/billing/consumers/all`,
                 {
@@ -162,13 +169,13 @@ export default function BillingWingsAllConsumersPage() {
                         unclaimed: 0,
                         registered: 0,
                         pending: 0,
+                        totalMeters: 0,
                     });
                     setError('No consumers found in the system.');
                     setLoading(false);
                     return;
                 }
 
-                // ✅ Process consumers from consumers collection
                 const processedConsumers = consumersData.map((consumer: any) => ({
                     ...consumer,
                     id: consumer._id || consumer.id,
@@ -181,57 +188,22 @@ export default function BillingWingsAllConsumersPage() {
                     meterNo: consumer.meterNo || 'N/A',
                     feederName: consumer.feederName || 'N/A',
                     consumerType: consumer.consumerType || 'residential',
-                    userType: consumer.userType || 'existing_consumer',
-                    role: consumer.role || 'consumer',
                     isActive: consumer.isActive !== undefined ? consumer.isActive : true,
                     isClaimed: consumer.isClaimed || false,
                     isRegistered: consumer.isRegistered || false,
                     claimedBy: consumer.claimedBy || null,
+                    claimedAt: consumer.claimedAt || null,
                     registeredBy: consumer.registeredBy || null,
-                    status: consumer.isRegistered ? 'Registered' :
-                        consumer.isClaimed ? 'Claimed' : 'Pending',
+                    registeredAt: consumer.registeredAt || null,
+                    userId: consumer.userId || null,
+                    status: consumer.isRegistered ? 'Registered' : 'Pending',
+                    // ✅ Multiple meters
+                    meters: consumer.meters || [consumer.meterNo],
+                    meterDetails: consumer.meterDetails || [],
                 }));
 
-                // ✅ Fetch billing summary for each consumer
-                const consumersWithBills = await Promise.all(
-                    processedConsumers.map(async (consumer: any) => {
-                        try {
-                            const consumerId = consumer._id || consumer.id;
-                            if (!consumerId) return consumer;
-
-                            const summaryResponse = await fetch(
-                                `${API_URL}/api/billing/consumers/${consumerId}/summary`,
-                                {
-                                    headers: {
-                                        'Authorization': token ? `Bearer ${token}` : '',
-                                        'Content-Type': 'application/json',
-                                    },
-                                }
-                            );
-
-                            if (summaryResponse.ok) {
-                                const summaryData = await summaryResponse.json();
-                                if (summaryData.success && summaryData.data) {
-                                    const billingSummary = summaryData.data.billingSummary || {};
-                                    return {
-                                        ...consumer,
-                                        totalBills: billingSummary.totalBills || 0,
-                                        totalPaid: billingSummary.totalPaid || 0,
-                                        totalDue: billingSummary.totalDue || 0,
-                                        lastPaymentDate: billingSummary.lastPaymentDate || consumer.lastPaymentDate,
-                                    };
-                                }
-                            }
-                            return consumer;
-                        } catch (error) {
-                            console.error(`Error fetching summary for ${consumer.name}:`, error);
-                            return consumer;
-                        }
-                    })
-                );
-
-                setConsumers(consumersWithBills);
-                updateStats(consumersWithBills);
+                setConsumers(processedConsumers);
+                updateStats(processedConsumers);
                 setError(null);
             } else {
                 throw new Error(data.message || 'No consumer data received');
@@ -258,6 +230,16 @@ export default function BillingWingsAllConsumersPage() {
         const registered = consumersData.filter(c => c.isRegistered).length;
         const pending = consumersData.filter(c => !c.isRegistered).length;
 
+        // ✅ Count total meters
+        let totalMeters = 0;
+        consumersData.forEach(c => {
+            if (c.meters && c.meters.length > 0) {
+                totalMeters += c.meters.length;
+            } else if (c.meterNo && c.meterNo !== 'N/A') {
+                totalMeters += 1;
+            }
+        });
+
         setStats({
             total,
             active,
@@ -269,6 +251,7 @@ export default function BillingWingsAllConsumersPage() {
             unclaimed,
             registered,
             pending,
+            totalMeters,
         });
     };
 
@@ -293,13 +276,13 @@ export default function BillingWingsAllConsumersPage() {
     const getConsumerStatus = (consumer: Consumer): StatusBadge => {
         if (consumer.isRegistered && consumer.isClaimed) {
             return {
-                label: '✅ Registered',
+                label: 'Registered',
                 color: 'bg-green-100 text-green-700',
                 icon: CheckCircle
             };
         } else if (consumer.isClaimed && !consumer.isRegistered) {
             return {
-                label: 'Claimed (Not Reg)',
+                label: 'Claimed (Not Registered)',
                 color: 'bg-yellow-100 text-yellow-700',
                 icon: Clock
             };
@@ -321,6 +304,14 @@ export default function BillingWingsAllConsumersPage() {
     const handleViewDetails = (consumer: Consumer) => {
         setSelectedConsumer(consumer);
         setShowDetailsModal(true);
+    };
+
+    const toggleExpand = (consumerId: string) => {
+        if (expandedConsumer === consumerId) {
+            setExpandedConsumer(null);
+        } else {
+            setExpandedConsumer(consumerId);
+        }
     };
 
     const filteredConsumers = consumers.filter(consumer => {
@@ -378,7 +369,7 @@ export default function BillingWingsAllConsumersPage() {
                         <span>All Consumers</span>
                     </h1>
                     <p className="text-gray-500 text-sm">
-                        {consumers.length} consumers in the system
+                        {consumers.length} consumers | {stats.totalMeters} total meters
                     </p>
                 </div>
                 <div className="flex items-center space-x-3">
@@ -394,7 +385,7 @@ export default function BillingWingsAllConsumersPage() {
                         <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                     </button>
                     <button
-                        onClick={() => router.push('/dashboard/billing_wings')}
+                        onClick={() => router.push('/dashboard/connection_wing')}
                         className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-2"
                     >
                         <ArrowLeft size={16} />
@@ -408,8 +399,8 @@ export default function BillingWingsAllConsumersPage() {
                 <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm text-gray-500">Total</p>
-                            <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
+                            <p className="text-sm text-gray-500">Total Consumers</p>
+                            <p className="text-xl font-bold text-gray-800">{stats.total}</p>
                         </div>
                         <div className="p-2 rounded-xl bg-blue-100">
                             <Users size={18} className="text-blue-600" />
@@ -420,7 +411,7 @@ export default function BillingWingsAllConsumersPage() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm text-gray-500">Active</p>
-                            <p className="text-2xl font-bold text-green-600">{stats.active}</p>
+                            <p className="text-xl font-bold text-green-600">{stats.active}</p>
                         </div>
                         <div className="p-2 rounded-xl bg-green-100">
                             <CheckCircle size={18} className="text-green-600" />
@@ -431,7 +422,7 @@ export default function BillingWingsAllConsumersPage() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm text-gray-500">Registered</p>
-                            <p className="text-2xl font-bold text-emerald-600">{stats.registered}</p>
+                            <p className="text-xl font-bold text-emerald-600">{stats.registered}</p>
                         </div>
                         <div className="p-2 rounded-xl bg-emerald-100">
                             <UserCheck size={18} className="text-emerald-600" />
@@ -442,7 +433,7 @@ export default function BillingWingsAllConsumersPage() {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm text-gray-500">Claimed</p>
-                            <p className="text-2xl font-bold text-purple-600">{stats.claimed}</p>
+                            <p className="text-xl font-bold text-purple-600">{stats.claimed}</p>
                         </div>
                         <div className="p-2 rounded-xl bg-purple-100">
                             <Shield size={18} className="text-purple-600" />
@@ -452,11 +443,11 @@ export default function BillingWingsAllConsumersPage() {
                 <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm text-gray-500">Pending</p>
-                            <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
+                            <p className="text-sm text-gray-500">Total Meters</p>
+                            <p className="text-xl font-bold text-orange-600">{stats.totalMeters}</p>
                         </div>
-                        <div className="p-2 rounded-xl bg-yellow-100">
-                            <Clock size={18} className="text-yellow-600" />
+                        <div className="p-2 rounded-xl bg-orange-100">
+                            <Package size={18} className="text-orange-600" />
                         </div>
                     </div>
                 </div>
@@ -543,10 +534,9 @@ export default function BillingWingsAllConsumersPage() {
                         <thead className="bg-gray-50 border-b">
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Consumer</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meter</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary Meter</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meters</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Feeder</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Due</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Registration</th>
                                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
@@ -555,7 +545,7 @@ export default function BillingWingsAllConsumersPage() {
                         <tbody className="divide-y divide-gray-100">
                             {paginatedConsumers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                                    <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                                         {searchTerm || filterType !== 'all' || filterStatus !== 'all' || filterRegistration !== 'all'
                                             ? 'No consumers match your filters.'
                                             : 'No consumers found in the system.'}
@@ -565,72 +555,117 @@ export default function BillingWingsAllConsumersPage() {
                                 paginatedConsumers.map((consumer) => {
                                     const status = getConsumerStatus(consumer);
                                     const StatusIcon = status.icon;
+                                    const meterCount = consumer.meters?.length || (consumer.meterNo && consumer.meterNo !== 'N/A' ? 1 : 0);
+                                    const hasMultipleMeters = meterCount > 1;
+                                    const isExpanded = expandedConsumer === consumer._id;
 
                                     return (
-                                        <tr key={consumer._id || consumer.id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center space-x-3">
-                                                    <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                                                        <span className="text-sm font-bold text-emerald-600">
-                                                            {consumer.name?.charAt(0).toUpperCase() || '?'}
-                                                        </span>
+                                        <React.Fragment key={consumer._id || consumer.id}>
+                                            <tr className="hover:bg-gray-50 transition-colors">
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                                                            <span className="text-sm font-bold text-emerald-600">
+                                                                {consumer.name?.charAt(0).toUpperCase() || '?'}
+                                                            </span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-medium text-gray-800">{consumer.name}</p>
+                                                            <p className="text-xs text-gray-400">{consumer.mobile}</p>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-sm font-medium text-gray-800">{consumer.name}</p>
-                                                        <p className="text-xs text-gray-400">{consumer.mobile}</p>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className="text-sm font-medium text-emerald-600">{consumer.meterNo || 'N/A'}</span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center space-x-2">
+                                                        <span className="text-sm font-medium text-gray-700">{meterCount}</span>
+                                                        {hasMultipleMeters && (
+                                                            <button
+                                                                onClick={() => toggleExpand(consumer._id || consumer.id || '')}
+                                                                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                                                                title={isExpanded ? 'Hide meters' : 'Show all meters'}
+                                                            >
+                                                                {isExpanded ? (
+                                                                    <ChevronUp size={16} className="text-gray-500" />
+                                                                ) : (
+                                                                    <ChevronDown size={16} className="text-gray-500" />
+                                                                )}
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="text-sm font-medium text-emerald-600">{consumer.meterNo || 'N/A'}</span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getConsumerTypeColor(consumer.consumerType)}`}>
-                                                    {getConsumerTypeLabel(consumer.consumerType)}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="text-sm text-gray-600">{consumer.feederName || 'N/A'}</span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`text-sm font-medium ${(consumer.totalDue || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                                    ৳{(consumer.totalDue || 0).toLocaleString()}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center space-x-1 w-fit ${consumer.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                                    }`}>
-                                                    {consumer.isActive ? (
-                                                        <>
-                                                            <CheckCircle size={12} />
-                                                            <span>Active</span>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <XCircle size={12} />
-                                                            <span>Inactive</span>
-                                                        </>
-                                                    )}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center space-x-1 w-fit ${status.color}`}>
-                                                    <StatusIcon size={12} />
-                                                    <span>{status.label}</span>
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center justify-center space-x-2">
-                                                    <button
-                                                        onClick={() => handleViewDetails(consumer)}
-                                                        className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-                                                        title="View Details"
-                                                    >
-                                                        <Eye size={16} className="text-gray-500" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getConsumerTypeColor(consumer.consumerType)}`}>
+                                                        {getConsumerTypeLabel(consumer.consumerType)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center space-x-1 w-fit ${consumer.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                                        }`}>
+                                                        {consumer.isActive ? (
+                                                            <>
+                                                                <CheckCircle size={12} />
+                                                                <span>Active</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <XCircle size={12} />
+                                                                <span>Inactive</span>
+                                                            </>
+                                                        )}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center space-x-1 w-fit ${status.color}`}>
+                                                        <StatusIcon size={12} />
+                                                        <span>{status.label}</span>
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center justify-center space-x-2">
+                                                        <button
+                                                            onClick={() => handleViewDetails(consumer)}
+                                                            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                                                            title="View Details"
+                                                        >
+                                                            <Eye size={16} className="text-gray-500" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {/* ✅ Expanded Meters Row */}
+                                            {isExpanded && consumer.meters && consumer.meters.length > 0 && (
+                                                <tr className="bg-gray-50">
+                                                    <td colSpan={7} className="px-6 py-3">
+                                                        <div className="flex items-center space-x-2">
+                                                            <List size={16} className="text-gray-400" />
+                                                            <span className="text-sm font-medium text-gray-600">All Meters:</span>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {consumer.meters.map((meter, index) => (
+                                                                    <span
+                                                                        key={index}
+                                                                        className={`px-3 py-1 text-xs font-medium rounded-full ${meter === consumer.meterNo
+                                                                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                                                                                : 'bg-gray-100 text-gray-600'
+                                                                            }`}
+                                                                    >
+                                                                        {meter}
+                                                                        {meter === consumer.meterNo && (
+                                                                            <span className="ml-1 text-emerald-600">★</span>
+                                                                        )}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                            <span className="text-xs text-gray-400 ml-2">
+                                                                ({consumer.meters.length} total)
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
                                     );
                                 })
                             )}
@@ -752,7 +787,7 @@ export default function BillingWingsAllConsumersPage() {
                                 <p className="text-sm font-medium">{selectedConsumer.nidNo}</p>
                             </div>
                             <div>
-                                <p className="text-xs text-gray-500">Meter Number</p>
+                                <p className="text-xs text-gray-500">Primary Meter</p>
                                 <p className="text-sm font-bold text-emerald-600">{selectedConsumer.meterNo || 'N/A'}</p>
                             </div>
                             <div>
@@ -764,6 +799,33 @@ export default function BillingWingsAllConsumersPage() {
                             <div>
                                 <p className="text-xs text-gray-500">Feeder</p>
                                 <p className="text-sm font-medium">{selectedConsumer.feederName || 'N/A'}</p>
+                            </div>
+                            {/* ✅ All Meters */}
+                            <div className="col-span-2">
+                                <p className="text-xs text-gray-500">All Meters</p>
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                    {selectedConsumer.meters && selectedConsumer.meters.length > 0 ? (
+                                        selectedConsumer.meters.map((meter, index) => (
+                                            <span
+                                                key={index}
+                                                className={`px-3 py-1 text-xs font-medium rounded-full ${meter === selectedConsumer.meterNo
+                                                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                                                        : 'bg-gray-100 text-gray-600'
+                                                    }`}
+                                            >
+                                                {meter}
+                                                {meter === selectedConsumer.meterNo && (
+                                                    <span className="ml-1 text-emerald-600">★</span>
+                                                )}
+                                            </span>
+                                        ))
+                                    ) : (
+                                        <span className="text-sm text-gray-400">No meters</span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    Total: {selectedConsumer.meters?.length || 0} meter(s)
+                                </p>
                             </div>
                             {selectedConsumer.isClaimed && (
                                 <>
@@ -789,36 +851,16 @@ export default function BillingWingsAllConsumersPage() {
                                     </div>
                                 </>
                             )}
+                            {selectedConsumer.userId && (
+                                <div className="col-span-2">
+                                    <p className="text-xs text-gray-500">User ID</p>
+                                    <p className="text-sm font-medium text-blue-600">{selectedConsumer.userId}</p>
+                                </div>
+                            )}
                             <div className="col-span-2">
                                 <p className="text-xs text-gray-500">Address</p>
                                 <p className="text-sm font-medium">{selectedConsumer.address || 'N/A'}</p>
                             </div>
-
-                            {/* Billing Summary */}
-                            <div className="col-span-2 border-t border-gray-100 pt-4">
-                                <p className="text-xs text-gray-500 font-medium mb-2">Billing Summary</p>
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div className="bg-blue-50 rounded-lg p-3 text-center">
-                                        <p className="text-lg font-bold text-blue-600">{selectedConsumer.totalBills || 0}</p>
-                                        <p className="text-xs text-gray-500">Total Bills</p>
-                                    </div>
-                                    <div className="bg-green-50 rounded-lg p-3 text-center">
-                                        <p className="text-lg font-bold text-green-600">৳{(selectedConsumer.totalPaid || 0).toLocaleString()}</p>
-                                        <p className="text-xs text-gray-500">Total Paid</p>
-                                    </div>
-                                    <div className="bg-red-50 rounded-lg p-3 text-center">
-                                        <p className="text-lg font-bold text-red-600">৳{(selectedConsumer.totalDue || 0).toLocaleString()}</p>
-                                        <p className="text-xs text-gray-500">Total Due</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {selectedConsumer.lastPaymentDate && (
-                                <div className="col-span-2">
-                                    <p className="text-xs text-gray-500">Last Payment Date</p>
-                                    <p className="text-sm font-medium">{new Date(selectedConsumer.lastPaymentDate).toLocaleDateString()}</p>
-                                </div>
-                            )}
                             <div>
                                 <p className="text-xs text-gray-500">Created</p>
                                 <p className="text-sm text-gray-600">{new Date(selectedConsumer.createdAt).toLocaleDateString()}</p>
@@ -830,18 +872,6 @@ export default function BillingWingsAllConsumersPage() {
                         </div>
 
                         <div className="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-100">
-                            <button
-                                onClick={() => {
-                                    setShowDetailsModal(false);
-                                    if (selectedConsumer.meterNo) {
-                                        router.push(`/dashboard/billing_wings/bills?meter=${selectedConsumer.meterNo}`);
-                                    }
-                                }}
-                                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
-                            >
-                                <FileText size={16} />
-                                <span>View Bills</span>
-                            </button>
                             <button
                                 onClick={() => setShowDetailsModal(false)}
                                 className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"

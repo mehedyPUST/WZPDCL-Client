@@ -619,8 +619,8 @@ export default function RegisterPage() {
                         type="submit"
                         disabled={loading || uploading}
                         className={`w-full py-2.5 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors ${loading || uploading
-                                ? 'bg-gray-400 cursor-not-allowed'
-                                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                             }`}
                     >
                         {loading ? (

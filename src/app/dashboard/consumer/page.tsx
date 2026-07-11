@@ -19,6 +19,14 @@ import {
     Loader2,
     Bell,
     RefreshCw,
+    Package,
+    User,
+    Mail,
+    Phone,
+    MapPin,
+    Building,
+    Shield,
+    ClipboardCheck,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -39,8 +47,8 @@ const StatCard = ({ title, value, icon, bgColor, subText, trend }: StatCardProps
                 <p className="text-2xl font-bold text-gray-800 mt-1">{value}</p>
                 {subText && (
                     <p className={`text-xs flex items-center mt-1 ${trend === 'up' ? 'text-green-600' :
-                            trend === 'down' ? 'text-red-600' :
-                                'text-gray-500'
+                        trend === 'down' ? 'text-red-600' :
+                            'text-gray-500'
                         }`}>
                         {trend === 'up' && <TrendingUp size={14} className="mr-1" />}
                         {trend === 'down' && <TrendingDown size={14} className="mr-1" />}
@@ -74,6 +82,7 @@ export default function ConsumerDashboardPage() {
         meterStatus: 'Inactive',
         totalBills: 0,
         totalPaid: 0,
+        metersCount: 0,
     });
     const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
 
@@ -92,44 +101,94 @@ export default function ConsumerDashboardPage() {
 
                 // Fetch real data from API
                 const token = localStorage.getItem('auth_token');
-                const meterNo = data.user?.meterNo || 'MTR-2026-001';
+                const userId = data.user?.id;
 
-                // Fetch bills
-                const billsRes = await fetch(
-                    `${API_URL}/api/consumer/bills/${meterNo}`,
-                    {
-                        headers: {
-                            'Authorization': token ? `Bearer ${token}` : '',
-                        },
+                // ✅ Fetch user's meters
+                let meters = [];
+                try {
+                    const meterRes = await fetch(
+                        `${API_URL}/api/user/meters/${userId}`,
+                        {
+                            headers: {
+                                'Authorization': token ? `Bearer ${token}` : '',
+                                'Content-Type': 'application/json',
+                            },
+                        }
+                    );
+                    if (meterRes.ok) {
+                        const meterData = await meterRes.json();
+                        if (meterData.success) {
+                            meters = meterData.data.meters || [];
+                        }
                     }
-                );
-                let billsData = [];
-                if (billsRes.ok) {
-                    const billsResult = await billsRes.json();
-                    billsData = billsResult.data || [];
+                } catch (error) {
+                    console.error('Error fetching meters:', error);
                 }
 
-                // If no bills, use mock data
+                const meterNo = data.user?.meterNo || (meters.length > 0 ? meters[0]?.meterNo : null);
+
+                // ✅ Fetch bills
+                let billsData = [];
+                if (meterNo) {
+                    try {
+                        const billsRes = await fetch(
+                            `${API_URL}/api/consumer/bills/${meterNo}`,
+                            {
+                                headers: {
+                                    'Authorization': token ? `Bearer ${token}` : '',
+                                },
+                            }
+                        );
+                        if (billsRes.ok) {
+                            const billsResult = await billsRes.json();
+                            billsData = billsResult.data || [];
+                        }
+                    } catch (error) {
+                        console.error('Error fetching bills:', error);
+                    }
+                }
+
+                // ✅ If no bills, use mock data
                 if (billsData.length === 0) {
                     billsData = getMockBills();
                 }
 
-                // Calculate stats
-                const unpaidBills = billsData.filter((b: any) => b.status === 'unpaid');
+                // ✅ Calculate stats
+                const unpaidBills = billsData.filter((b: any) => b.status === 'unpaid' || b.status === 'pending');
                 const currentUnpaid = unpaidBills.length > 0 ? unpaidBills[0] : null;
                 const paidBills = billsData.filter((b: any) => b.status === 'paid');
-                const totalPaid = paidBills.reduce((sum: number, b: any) => sum + b.totalAmount, 0);
+                const totalPaid = paidBills.reduce((sum: number, b: any) => sum + (b.totalAmount || 0), 0);
+
+                // ✅ Fetch complaints count
+                let complaintsCount = 0;
+                try {
+                    const complaintsRes = await fetch(
+                        `${API_URL}/api/complaints/consumer/${userId}`,
+                        {
+                            headers: {
+                                'Authorization': token ? `Bearer ${token}` : '',
+                            },
+                        }
+                    );
+                    if (complaintsRes.ok) {
+                        const complaintsResult = await complaintsRes.json();
+                        complaintsCount = complaintsResult.data?.length || 0;
+                    }
+                } catch (error) {
+                    console.error('Error fetching complaints:', error);
+                }
 
                 setStats({
                     currentBill: currentUnpaid ? `৳${currentUnpaid.totalAmount.toLocaleString()}` : '৳0',
                     dueDate: currentUnpaid?.dueDate || 'No due bill',
-                    complaints: 0, // Will be fetched from complaints API
+                    complaints: complaintsCount,
                     meterStatus: data.user?.isActive ? 'Active' : 'Inactive',
                     totalBills: billsData.length,
                     totalPaid: totalPaid,
+                    metersCount: meters.length,
                 });
 
-                // Set recent activities
+                // ✅ Set recent activities
                 const activities: RecentActivity[] = [
                     ...billsData.slice(0, 3).map((b: any) => ({
                         id: b.billId || `bill-${Date.now()}`,
@@ -142,7 +201,18 @@ export default function ConsumerDashboardPage() {
                     })),
                 ];
 
-                setRecentActivities(activities);
+                // ✅ Add meter claimed activity if any
+                if (meters.length > 0) {
+                    activities.unshift({
+                        id: `meter-${Date.now()}`,
+                        type: 'connection',
+                        message: `Meter ${meters[0]?.meterNo || ''} claimed successfully`,
+                        time: new Date().toLocaleDateString(),
+                        status: 'completed',
+                    });
+                }
+
+                setRecentActivities(activities.slice(0, 5));
 
             } catch (error) {
                 console.error('Error fetching dashboard data:', error);
@@ -160,6 +230,7 @@ export default function ConsumerDashboardPage() {
                     meterStatus: 'Active',
                     totalBills: mockBills.length,
                     totalPaid: totalPaid,
+                    metersCount: 1,
                 });
 
                 setRecentActivities([
@@ -183,7 +254,7 @@ export default function ConsumerDashboardPage() {
                 billingMonth: 'June 2026',
                 totalAmount: 2587.50,
                 dueDate: '2026-07-15',
-                status: 'paid',
+                status: 'unpaid',
                 createdAt: '2026-07-01',
             },
             {
@@ -191,7 +262,7 @@ export default function ConsumerDashboardPage() {
                 billingMonth: 'May 2026',
                 totalAmount: 1987.50,
                 dueDate: '2026-06-15',
-                status: 'unpaid',
+                status: 'paid',
                 createdAt: '2026-06-01',
             },
             {
@@ -199,16 +270,8 @@ export default function ConsumerDashboardPage() {
                 billingMonth: 'April 2026',
                 totalAmount: 1950.00,
                 dueDate: '2026-05-15',
-                status: 'pending',
-                createdAt: '2026-05-01',
-            },
-            {
-                billId: 'B-2026-004',
-                billingMonth: 'March 2026',
-                totalAmount: 2025.00,
-                dueDate: '2026-04-15',
                 status: 'paid',
-                createdAt: '2026-04-01',
+                createdAt: '2026-05-01',
             },
         ];
     };
@@ -242,23 +305,16 @@ export default function ConsumerDashboardPage() {
 
     return (
         <div className="space-y-6">
-            {/* Page Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Consumer Dashboard</h1>
-                    <p className="text-gray-500 text-sm">Manage your electricity account</p>
-                </div>
-                <div className="flex items-center space-x-3">
-                    <button className="p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors relative">
-                        <Bell size={18} className="text-gray-500" />
-                        <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-                    </button>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
-                    >
-                        <RefreshCw size={18} className="text-gray-500" />
-                    </button>
+            {/* Welcome Header */}
+            <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-2xl p-6 text-white">
+                <div className="flex items-start justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold">Welcome back, {user?.name || 'Consumer'}! 👋</h1>
+                        <p className="text-emerald-100 mt-1">Manage your electricity account, bills, and complaints</p>
+                    </div>
+                    <div className="bg-emerald-500/30 p-3 rounded-xl hidden sm:block">
+                        <Home size={32} className="text-white" />
+                    </div>
                 </div>
             </div>
 
@@ -270,13 +326,15 @@ export default function ConsumerDashboardPage() {
                     icon={<CreditCard size={20} className="text-white" />}
                     bgColor="bg-blue-100"
                     subText={stats.dueDate !== 'No due bill' ? `Due: ${stats.dueDate}` : 'No pending bills'}
-                    trend={stats.dueDate !== 'No due bill' ? 'up' : 'neutral'}
+                    trend={stats.dueDate !== 'No due bill' ? 'down' : 'neutral'}
                 />
                 <StatCard
-                    title="Due Date"
-                    value={stats.dueDate}
-                    icon={<Calendar size={20} className="text-white" />}
-                    bgColor="bg-yellow-100"
+                    title="My Meters"
+                    value={stats.metersCount}
+                    icon={<Package size={20} className="text-white" />}
+                    bgColor="bg-purple-100"
+                    subText={stats.metersCount > 0 ? `${stats.metersCount} meter(s) connected` : 'No meters'}
+                    trend={stats.metersCount > 0 ? 'up' : 'neutral'}
                 />
                 <StatCard
                     title="Complaints"
@@ -299,6 +357,14 @@ export default function ConsumerDashboardPage() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                     <h3 className="font-semibold text-gray-800 mb-4">Quick Actions</h3>
                     <div className="space-y-2">
+                        <button
+                            onClick={() => router.push('/dashboard/consumer/my-meters')}
+                            className="w-full text-left px-4 py-2.5 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors flex items-center space-x-3"
+                        >
+                            <Package size={18} className="text-emerald-600" />
+                            <span>My Meters</span>
+                            <ArrowRight size={16} className="ml-auto text-gray-400" />
+                        </button>
                         <button
                             onClick={() => router.push('/dashboard/consumer/my-bills')}
                             className="w-full text-left px-4 py-2.5 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors flex items-center space-x-3"
@@ -338,16 +404,16 @@ export default function ConsumerDashboardPage() {
                     <h3 className="font-semibold text-gray-800 mb-4">Account Summary</h3>
                     <div className="space-y-3">
                         <div className="flex items-center justify-between py-2 border-b border-gray-50">
+                            <span className="text-sm text-gray-600">Name</span>
+                            <span className="text-sm font-medium">{user?.name || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-2 border-b border-gray-50">
+                            <span className="text-sm text-gray-600">Email</span>
+                            <span className="text-sm font-medium">{user?.email || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-2 border-b border-gray-50">
                             <span className="text-sm text-gray-600">Meter Number</span>
-                            <span className="text-sm font-medium">{user?.meterNo || 'MTR-2026-001'}</span>
-                        </div>
-                        <div className="flex items-center justify-between py-2 border-b border-gray-50">
-                            <span className="text-sm text-gray-600">Feeder</span>
-                            <span className="text-sm font-medium">{user?.feederName || 'Trimohoni'}</span>
-                        </div>
-                        <div className="flex items-center justify-between py-2 border-b border-gray-50">
-                            <span className="text-sm text-gray-600">Consumer Type</span>
-                            <span className="text-sm font-medium">Residential</span>
+                            <span className="text-sm font-medium text-emerald-600">{user?.meterNo || 'N/A'}</span>
                         </div>
                         <div className="flex items-center justify-between py-2 border-b border-gray-50">
                             <span className="text-sm text-gray-600">Total Bills</span>
@@ -372,7 +438,10 @@ export default function ConsumerDashboardPage() {
             {recentActivities.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-semibold text-gray-800">Recent Activity</h3>
+                        <h3 className="font-semibold text-gray-800 flex items-center space-x-2">
+                            <Clock size={18} className="text-emerald-600" />
+                            <span>Recent Activity</span>
+                        </h3>
                         <button
                             onClick={() => router.push('/dashboard/consumer/my-bills')}
                             className="text-sm text-emerald-600 hover:text-emerald-700"

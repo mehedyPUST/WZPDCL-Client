@@ -1,7 +1,7 @@
 // app/(auth)/login/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
-const LoginPage = () => {
+// মূল লজিক এবং UI এই কম্পোনেন্টে থাকবে
+const LoginForm = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [loading, setLoading] = useState(false);
@@ -131,14 +132,18 @@ const LoginPage = () => {
         }
     };
 
-    const handleGoogleSignIn = () => {
+    // ✅ Updated Google Sign-In using Better Auth Client
+    const handleGoogleSignIn = async () => {
         setGoogleLoading(true);
-        console.log('🔍 Starting Google Sign-In...');
-
-        // ✅ Use Better Auth's social sign-in
-        const redirectUrl = `${API_URL}/api/auth/sign-in/social?provider=google`;
-        console.log('🔗 Redirecting to:', redirectUrl);
-        window.location.href = redirectUrl;
+        try {
+            await authClient.signIn.social({
+                provider: 'google',
+                callbackURL: '/', // লগইন সফল হলে যেখানে রিডাইরেক্ট করবে
+            });
+        } catch (error) {
+            console.error('❌ Google sign in error:', error);
+            setGoogleLoading(false);
+        }
     };
 
     const handleDemoLogin = () => {
@@ -208,8 +213,7 @@ const LoginPage = () => {
                                 name="email"
                                 value={formData.email}
                                 onChange={handleChange}
-                                className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.email ? 'border-red-500' : 'border-gray-200'
-                                    }`}
+                                className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.email ? 'border-red-500' : 'border-gray-200'}`}
                                 placeholder="you@example.com"
                             />
                         </div>
@@ -227,8 +231,7 @@ const LoginPage = () => {
                                 name="password"
                                 value={formData.password}
                                 onChange={handleChange}
-                                className={`w-full pl-10 pr-12 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.password ? 'border-red-500' : 'border-gray-200'
-                                    }`}
+                                className={`w-full pl-10 pr-12 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.password ? 'border-red-500' : 'border-gray-200'}`}
                                 placeholder="Min 8 characters"
                             />
                             <button
@@ -262,8 +265,7 @@ const LoginPage = () => {
                     <button
                         type="submit"
                         disabled={loading}
-                        className={`w-full py-2.5 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                            }`}
+                        className={`w-full py-2.5 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}
                     >
                         {loading ? (
                             <>
@@ -294,8 +296,7 @@ const LoginPage = () => {
                     type="button"
                     onClick={handleGoogleSignIn}
                     disabled={googleLoading}
-                    className={`w-full flex items-center justify-center space-x-2 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg transition-colors duration-200 ${googleLoading ? 'opacity-70 cursor-not-allowed bg-gray-100' : 'hover:bg-gray-50'
-                        }`}
+                    className={`w-full flex items-center justify-center space-x-2 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg transition-colors duration-200 ${googleLoading ? 'opacity-70 cursor-not-allowed bg-gray-100' : 'hover:bg-gray-50'}`}
                 >
                     {googleLoading ? (
                         <Loader2 size={20} className="animate-spin text-emerald-600" />
@@ -334,4 +335,15 @@ const LoginPage = () => {
     );
 };
 
-export default LoginPage;
+// ✅ Next.js App Router এর জন্য Suspense Wrapper
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-emerald-50">
+                <Loader2 className="animate-spin text-emerald-600" size={32} />
+            </div>
+        }>
+            <LoginForm />
+        </Suspense>
+    );
+}

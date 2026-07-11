@@ -64,42 +64,10 @@ interface Bill {
     updatedAt: string;
 }
 
-interface StatCardProps {
-    title: string;
-    value: string | number;
-    icon: React.ReactNode;
-    bgColor: string;
-    change?: string;
-    trend?: 'up' | 'down' | 'neutral';
-}
-
-const StatCard = ({ title, value, icon, bgColor, change, trend }: StatCardProps) => (
-    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
-        <div className="flex items-center justify-between">
-            <div>
-                <p className="text-sm text-gray-500 font-medium">{title}</p>
-                <p className="text-2xl font-bold text-gray-800 mt-1">{value}</p>
-                {change && (
-                    <p className={`text-xs flex items-center mt-1 ${trend === 'up' ? 'text-green-600' :
-                        trend === 'down' ? 'text-red-600' :
-                            'text-gray-500'
-                        }`}>
-                        {trend === 'up' && <TrendingUp size={14} className="mr-1" />}
-                        {trend === 'down' && <TrendingDown size={14} className="mr-1" />}
-                        {change}
-                    </p>
-                )}
-            </div>
-            <div className={`p-3 rounded-xl ${bgColor}`}>
-                {icon}
-            </div>
-        </div>
-    </div>
-);
-
 export default function BillingWingsDashboardPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [bills, setBills] = useState<Bill[]>([]);
     const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
     const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -117,6 +85,7 @@ export default function BillingWingsDashboardPage() {
         paidCount: 0,
     });
     const [user, setUser] = useState<any>(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
     const ITEMS_PER_PAGE = 5;
@@ -141,147 +110,83 @@ export default function BillingWingsDashboardPage() {
 
     const fetchBills = async () => {
         setLoading(true);
+        setError(null);
         try {
             const token = localStorage.getItem('auth_token');
+
+            console.log('📡 Fetching bills from API...');
+
             const response = await fetch(
-                `${API_URL}/api/billing/bills`,
+                `${API_URL}/api/billing/bills/all`,
                 {
                     headers: {
                         'Authorization': token ? `Bearer ${token}` : '',
+                        'Content-Type': 'application/json',
                     },
                 }
             );
 
-            let data;
-            if (response.ok) {
-                data = await response.json();
-                if (data.data && data.data.length > 0) {
-                    setBills(data.data);
-                    updateStats(data.data);
+            console.log('📡 Response status:', response.status);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('❌ API Error:', errorData);
+                throw new Error(errorData.message || 'Failed to fetch bills');
+            }
+
+            const data = await response.json();
+            console.log('📦 API Response:', data);
+
+            if (data.success && data.data) {
+                const billsData = data.data;
+                console.log(`📦 Found ${billsData.length} bills`);
+
+                if (billsData.length === 0) {
+                    setBills([]);
+                    setStats({
+                        totalBills: 0,
+                        totalAmount: 0,
+                        collectedAmount: 0,
+                        pendingAmount: 0,
+                        collectionRate: 0,
+                        unpaidCount: 0,
+                        paidCount: 0,
+                    });
+                    setError('No bills found in the system.');
                     setLoading(false);
                     return;
                 }
+
+                setBills(billsData);
+                updateStats(billsData);
+                setError(null);
+            } else {
+                throw new Error(data.message || 'No bill data received');
             }
 
-            // Mock data fallback
-            const mockBills = getMockBills();
-            setBills(mockBills);
-            updateStats(mockBills);
-
-        } catch (error) {
-            console.error('Error fetching bills:', error);
-            const mockBills = getMockBills();
-            setBills(mockBills);
-            updateStats(mockBills);
+        } catch (error: any) {
+            console.error('❌ Error fetching bills:', error);
+            setError(error.message || 'Failed to load bills');
+            setBills([]);
+            setStats({
+                totalBills: 0,
+                totalAmount: 0,
+                collectedAmount: 0,
+                pendingAmount: 0,
+                collectionRate: 0,
+                unpaidCount: 0,
+                paidCount: 0,
+            });
         } finally {
             setLoading(false);
         }
     };
 
-    const getMockBills = (): Bill[] => {
-        return [
-            {
-                billId: 'B-2026-001',
-                meterNo: 'MTR-2026-001',
-                consumerName: 'John Doe',
-                billingMonth: 'June 2026',
-                consumerType: 'residential',
-                previousReading: 1245,
-                currentReading: 1590,
-                unitsConsumed: 345,
-                ratePerUnit: 7.50,
-                totalAmount: 2587.50,
-                dueDate: '2026-07-15',
-                status: 'paid',
-                paidAt: '2026-07-01 10:30 AM',
-                paymentMethod: 'Stripe',
-                lateFee: 0,
-                vatAmount: 0,
-                createdAt: '2026-07-01 09:00 AM',
-                updatedAt: '2026-07-01 10:30 AM',
-            },
-            {
-                billId: 'B-2026-002',
-                meterNo: 'MTR-2026-002',
-                consumerName: 'Jane Smith',
-                billingMonth: 'June 2026',
-                consumerType: 'commercial',
-                previousReading: 980,
-                currentReading: 1490,
-                unitsConsumed: 510,
-                ratePerUnit: 9.75,
-                totalAmount: 4972.50,
-                dueDate: '2026-07-15',
-                status: 'unpaid',
-                lateFee: 248.63,
-                vatAmount: 0,
-                createdAt: '2026-07-01 09:00 AM',
-                updatedAt: '2026-07-01 09:00 AM',
-            },
-            {
-                billId: 'B-2026-003',
-                meterNo: 'MTR-2026-003',
-                consumerName: 'Robert Johnson',
-                billingMonth: 'June 2026',
-                consumerType: 'industrial',
-                previousReading: 1500,
-                currentReading: 2150,
-                unitsConsumed: 650,
-                ratePerUnit: 11.25,
-                totalAmount: 7312.50,
-                dueDate: '2026-07-15',
-                status: 'pending',
-                lateFee: 0,
-                vatAmount: 0,
-                createdAt: '2026-07-01 09:00 AM',
-                updatedAt: '2026-07-01 09:00 AM',
-            },
-            {
-                billId: 'B-2026-004',
-                meterNo: 'MTR-2026-004',
-                consumerName: 'Emily Davis',
-                billingMonth: 'May 2026',
-                consumerType: 'residential',
-                previousReading: 720,
-                currentReading: 980,
-                unitsConsumed: 260,
-                ratePerUnit: 7.50,
-                totalAmount: 1950.00,
-                dueDate: '2026-06-15',
-                status: 'paid',
-                paidAt: '2026-06-12 02:15 PM',
-                paymentMethod: 'Stripe',
-                lateFee: 0,
-                vatAmount: 0,
-                createdAt: '2026-06-01 09:00 AM',
-                updatedAt: '2026-06-12 02:15 PM',
-            },
-            {
-                billId: 'B-2026-005',
-                meterNo: 'MTR-2026-005',
-                consumerName: 'Michael Brown',
-                billingMonth: 'May 2026',
-                consumerType: 'commercial',
-                previousReading: 450,
-                currentReading: 820,
-                unitsConsumed: 370,
-                ratePerUnit: 9.75,
-                totalAmount: 3607.50,
-                dueDate: '2026-06-15',
-                status: 'unpaid',
-                lateFee: 180.38,
-                vatAmount: 0,
-                createdAt: '2026-06-01 09:00 AM',
-                updatedAt: '2026-06-01 09:00 AM',
-            },
-        ];
-    };
-
     const updateStats = (billsData: Bill[]) => {
         const total = billsData.length;
-        const totalAmount = billsData.reduce((sum, b) => sum + b.totalAmount, 0);
-        const collectedAmount = billsData.filter(b => b.status === 'paid').reduce((sum, b) => sum + b.totalAmount, 0);
-        const pendingAmount = billsData.filter(b => b.status === 'unpaid' || b.status === 'pending').reduce((sum, b) => sum + b.totalAmount, 0);
+        const totalAmount = billsData.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+        const collectedAmount = billsData.filter(b => b.status === 'paid').reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+        const pendingAmount = billsData.filter(b => b.status === 'unpaid' || b.status === 'pending').reduce((sum, b) => sum + (b.totalAmount || 0), 0);
         const collectionRate = totalAmount > 0 ? (collectedAmount / totalAmount) * 100 : 0;
         const paidCount = billsData.filter(b => b.status === 'paid').length;
         const unpaidCount = billsData.filter(b => b.status === 'unpaid' || b.status === 'pending').length;
@@ -315,10 +220,15 @@ export default function BillingWingsDashboardPage() {
         return types[type] || type;
     };
 
+    const handleViewDetails = (bill: Bill) => {
+        setSelectedBill(bill);
+        setShowDetailsModal(true);
+    };
+
     const filteredBills = bills.filter(bill => {
-        const matchesSearch = bill.billId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            bill.consumerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            bill.meterNo.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = bill.billId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            bill.consumerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            bill.meterNo?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesStatus = filterStatus === 'all' || bill.status === filterStatus;
         const matchesType = filterType === 'all' || bill.consumerType === filterType;
         return matchesSearch && matchesStatus && matchesType;
@@ -331,7 +241,7 @@ export default function BillingWingsDashboardPage() {
     );
 
     const statCards = [
-        { title: 'Total Bills', value: stats.totalBills, icon: FileText, bgColor: 'bg-blue-100', change: '', trend: 'neutral' as const },
+        { title: 'Total Bills', value: stats.totalBills, icon: FileText, bgColor: 'bg-blue-100', change: `${stats.totalBills} bills`, trend: 'neutral' as const },
         { title: 'Total Amount', value: `৳${stats.totalAmount.toLocaleString()}`, icon: DollarSign, bgColor: 'bg-emerald-100', change: '', trend: 'neutral' as const },
         { title: 'Collected', value: `৳${stats.collectedAmount.toLocaleString()}`, icon: CheckCircle, bgColor: 'bg-green-100', change: `${stats.collectionRate.toFixed(1)}% rate`, trend: 'up' as const },
         { title: 'Pending', value: `৳${stats.pendingAmount.toLocaleString()}`, icon: Clock, bgColor: 'bg-yellow-100', change: `${stats.unpaidCount} pending`, trend: 'down' as const },
@@ -345,6 +255,22 @@ export default function BillingWingsDashboardPage() {
         );
     }
 
+    if (error && bills.length === 0) {
+        return (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
+                <AlertCircle size={48} className="text-red-500 mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-red-700">Failed to Load Bills</h3>
+                <p className="text-red-600 mt-2">{error}</p>
+                <button
+                    onClick={fetchBills}
+                    className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                    Try Again
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             {/* Page Header */}
@@ -354,15 +280,21 @@ export default function BillingWingsDashboardPage() {
                         <DollarSign size={24} className="text-emerald-600" />
                         <span>Billing Dashboard</span>
                     </h1>
-                    <p className="text-gray-500 text-sm">Manage bills, collections, and generate new bills</p>
+                    <p className="text-gray-500 text-sm">
+                        {bills.length} bills in the system
+                    </p>
                 </div>
                 <div className="flex items-center space-x-3">
                     <button
-                        onClick={fetchBills}
-                        className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                        onClick={() => {
+                            setIsRefreshing(true);
+                            fetchBills().finally(() => setIsRefreshing(false));
+                        }}
+                        disabled={isRefreshing}
+                        className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 disabled:opacity-50"
                     >
-                        <RefreshCw size={16} />
-                        <span>Refresh</span>
+                        <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+                        <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                     </button>
                     <button
                         onClick={() => router.push('/dashboard/billing_wings/generate-bills')}
@@ -371,10 +303,12 @@ export default function BillingWingsDashboardPage() {
                         <Plus size={16} />
                         <span>Generate Bills</span>
                     </button>
-                    <button className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2">
-                        <Download size={16} />
-                        <span>Export</span>
-                    </button>
+                    {bills.length > 0 && (
+                        <button className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2">
+                            <Download size={16} />
+                            <span>Export</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -388,6 +322,14 @@ export default function BillingWingsDashboardPage() {
                                 <div>
                                     <p className="text-sm text-gray-500">{stat.title}</p>
                                     <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
+                                    {stat.change && (
+                                        <p className={`text-xs ${stat.trend === 'up' ? 'text-green-600' :
+                                                stat.trend === 'down' ? 'text-red-600' :
+                                                    'text-gray-400'
+                                            }`}>
+                                            {stat.change}
+                                        </p>
+                                    )}
                                 </div>
                                 <div className={`p-3 rounded-xl ${stat.bgColor}`}>
                                     <Icon size={20} />
@@ -407,14 +349,20 @@ export default function BillingWingsDashboardPage() {
                             type="text"
                             placeholder="Search by bill ID, consumer name, or meter number..."
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                     </div>
                     <div className="flex flex-wrap gap-3">
                         <select
                             value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
+                            onChange={(e) => {
+                                setFilterStatus(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             className="px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                         >
                             <option value="all">All Status</option>
@@ -424,7 +372,10 @@ export default function BillingWingsDashboardPage() {
                         </select>
                         <select
                             value={filterType}
-                            onChange={(e) => setFilterType(e.target.value)}
+                            onChange={(e) => {
+                                setFilterType(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             className="px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                         >
                             <option value="all">All Types</option>
@@ -437,6 +388,7 @@ export default function BillingWingsDashboardPage() {
                                 setSearchTerm('');
                                 setFilterStatus('all');
                                 setFilterType('all');
+                                setCurrentPage(1);
                             }}
                             className="px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
                         >
@@ -444,6 +396,9 @@ export default function BillingWingsDashboardPage() {
                             <span>Reset</span>
                         </button>
                     </div>
+                </div>
+                <div className="mt-2 text-xs text-gray-400">
+                    Found {filteredBills.length} bills
                 </div>
             </div>
 
@@ -466,7 +421,9 @@ export default function BillingWingsDashboardPage() {
                             {paginatedBills.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                                        No bills found.
+                                        {searchTerm || filterStatus !== 'all' || filterType !== 'all'
+                                            ? 'No bills match your filters.'
+                                            : 'No bills found in the system.'}
                                     </td>
                                 </tr>
                             ) : (
@@ -475,12 +432,13 @@ export default function BillingWingsDashboardPage() {
                                     const StatusIcon = StatusBadge.icon;
 
                                     return (
-                                        <tr key={bill.billId} className="hover:bg-gray-50 transition-colors">
+                                        <tr key={bill.billId || bill._id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4">
                                                 <span className="text-sm font-medium text-gray-800">{bill.billId}</span>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <p className="text-sm text-gray-800">{bill.consumerName}</p>
+                                                <p className="text-xs text-gray-400">{bill.consumerType}</p>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className="text-sm text-gray-600">{bill.meterNo}</span>
@@ -489,9 +447,8 @@ export default function BillingWingsDashboardPage() {
                                                 <span className="text-sm text-gray-600">{bill.billingMonth}</span>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className={`text-sm font-medium ${bill.status === 'unpaid' ? 'text-red-600' : 'text-gray-800'
-                                                    }`}>
-                                                    ৳{bill.totalAmount.toLocaleString()}
+                                                <span className={`text-sm font-medium ${bill.status === 'unpaid' ? 'text-red-600' : 'text-gray-800'}`}>
+                                                    ৳{(bill.totalAmount || 0).toLocaleString()}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">
@@ -502,10 +459,7 @@ export default function BillingWingsDashboardPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <button
-                                                    onClick={() => {
-                                                        setSelectedBill(bill);
-                                                        setShowDetailsModal(true);
-                                                    }}
+                                                    onClick={() => handleViewDetails(bill)}
                                                     className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
                                                     title="View Details"
                                                 >
@@ -522,7 +476,7 @@ export default function BillingWingsDashboardPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+                    <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-4">
                         <p className="text-sm text-gray-500">
                             Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredBills.length)} of {filteredBills.length} bills
                         </p>
@@ -534,18 +488,41 @@ export default function BillingWingsDashboardPage() {
                             >
                                 <ChevronLeft size={16} />
                             </button>
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                                let pageNum;
+                                if (totalPages <= 5) {
+                                    pageNum = i + 1;
+                                } else if (currentPage <= 3) {
+                                    pageNum = i + 1;
+                                } else if (currentPage >= totalPages - 2) {
+                                    pageNum = totalPages - 4 + i;
+                                } else {
+                                    pageNum = currentPage - 2 + i;
+                                }
+                                return (
+                                    <button
+                                        key={pageNum}
+                                        onClick={() => setCurrentPage(pageNum)}
+                                        className={`px-3 py-1 rounded-lg text-sm transition-colors ${currentPage === pageNum
+                                                ? 'bg-emerald-600 text-white'
+                                                : 'border border-gray-200 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        {pageNum}
+                                    </button>
+                                );
+                            })}
+                            {totalPages > 5 && currentPage < totalPages - 2 && (
+                                <span className="text-gray-400">...</span>
+                            )}
+                            {totalPages > 5 && currentPage < totalPages - 2 && (
                                 <button
-                                    key={page}
-                                    onClick={() => setCurrentPage(page)}
-                                    className={`px-3 py-1 rounded-lg text-sm transition-colors ${currentPage === page
-                                            ? 'bg-emerald-600 text-white'
-                                            : 'border border-gray-200 hover:bg-gray-50'
-                                        }`}
+                                    onClick={() => setCurrentPage(totalPages)}
+                                    className={`px-3 py-1 rounded-lg text-sm transition-colors border border-gray-200 hover:bg-gray-50`}
                                 >
-                                    {page}
+                                    {totalPages}
                                 </button>
-                            ))}
+                            )}
                             <button
                                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                 disabled={currentPage === totalPages}
@@ -571,14 +548,19 @@ export default function BillingWingsDashboardPage() {
                             <Plus size={18} />
                             <span className="text-sm">Generate Monthly Bills</span>
                         </button>
-                        <button className="w-full text-left px-4 py-2.5 bg-emerald-500/30 hover:bg-emerald-500/50 rounded-lg transition-colors flex items-center space-x-3">
-                            <FileText size={18} />
-                            <span className="text-sm">View All Bills</span>
+                        <button
+                            onClick={() => router.push('/dashboard/billing_wings/all-consumers')}
+                            className="w-full text-left px-4 py-2.5 bg-emerald-500/30 hover:bg-emerald-500/50 rounded-lg transition-colors flex items-center space-x-3"
+                        >
+                            <Users size={18} />
+                            <span className="text-sm">View All Consumers</span>
                         </button>
-                        <button className="w-full text-left px-4 py-2.5 bg-emerald-500/30 hover:bg-emerald-500/50 rounded-lg transition-colors flex items-center space-x-3">
-                            <Download size={18} />
-                            <span className="text-sm">Export Collection Report</span>
-                        </button>
+                        {bills.length > 0 && (
+                            <button className="w-full text-left px-4 py-2.5 bg-emerald-500/30 hover:bg-emerald-500/50 rounded-lg transition-colors flex items-center space-x-3">
+                                <Download size={18} />
+                                <span className="text-sm">Export Collection Report</span>
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -590,18 +572,27 @@ export default function BillingWingsDashboardPage() {
                                 {stats.collectionRate.toFixed(1)}%
                             </p>
                             <p className="text-xs text-gray-500">Collection Rate</p>
+                            <p className="text-xs text-gray-400 mt-1">
+                                {stats.paidCount} paid / {stats.totalBills} total
+                            </p>
                         </div>
                         <div className="bg-gray-50 rounded-lg p-4 text-center">
                             <p className="text-2xl font-bold text-green-600">
                                 ৳{stats.collectedAmount.toLocaleString()}
                             </p>
-                            <p className="text-xs text-gray-500">Collected</p>
+                            <p className="text-xs text-gray-500">Collected Amount</p>
+                            <p className="text-xs text-gray-400 mt-1">
+                                From {stats.paidCount} bills
+                            </p>
                         </div>
                         <div className="bg-gray-50 rounded-lg p-4 text-center">
                             <p className="text-2xl font-bold text-red-600">
                                 ৳{stats.pendingAmount.toLocaleString()}
                             </p>
-                            <p className="text-xs text-gray-500">Pending</p>
+                            <p className="text-xs text-gray-500">Pending Amount</p>
+                            <p className="text-xs text-gray-400 mt-1">
+                                {stats.unpaidCount} bills pending
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -691,11 +682,19 @@ export default function BillingWingsDashboardPage() {
                                     <p className="text-sm font-medium text-red-600">৳{selectedBill.lateFee.toFixed(2)}</p>
                                 </div>
                             )}
-                            <div className="col-span-2">
+                            <div className="col-span-2 border-t border-gray-100 pt-4">
                                 <p className="text-xs text-gray-500">Total Amount</p>
                                 <p className={`text-2xl font-bold ${selectedBill.status === 'unpaid' ? 'text-red-600' : 'text-gray-800'}`}>
-                                    ৳{selectedBill.totalAmount.toLocaleString()}
+                                    ৳{(selectedBill.totalAmount || 0).toLocaleString()}
                                 </p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Created At</p>
+                                <p className="text-sm text-gray-600">{new Date(selectedBill.createdAt).toLocaleString()}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Last Updated</p>
+                                <p className="text-sm text-gray-600">{new Date(selectedBill.updatedAt).toLocaleString()}</p>
                             </div>
                         </div>
 
@@ -710,7 +709,7 @@ export default function BillingWingsDashboardPage() {
                             </button>
                             <button
                                 onClick={() => setShowDetailsModal(false)}
-                                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
                             >
                                 Close
                             </button>

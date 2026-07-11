@@ -4,12 +4,11 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+    Zap,
     FileText,
-    AlertCircle,
     CheckCircle,
     Clock,
     Users,
-    Zap,
     MapPin,
     Search,
     Eye,
@@ -19,10 +18,7 @@ import {
     Loader2,
     TrendingUp,
     TrendingDown,
-    DollarSign,
     Calendar,
-    ArrowRight,
-    Filter,
     X,
     User,
     Phone,
@@ -34,14 +30,15 @@ import {
     Send,
     Check,
     XCircle,
-    Printer,
-    Download,
-    PieChart,
-    BarChart3,
+    ArrowRight,
+    Filter,
     Activity,
-    ThumbsUp,
-    ThumbsDown,
-    Clock as ClockIcon,
+    Plus,
+    ListChecks,
+    AlertTriangle,
+    Save,
+    BarChart3,
+    PieChart,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -62,7 +59,7 @@ interface ConnectionApplication {
     poleNumber: string;
     nearestLandmark: string;
     consumerId: string;
-    status: 'pending_payment' | 'payment_done' | 'under_xen_review' | 'forwarded_to_wing' | 'implemented' | 'rejected';
+    status: 'pending_payment' | 'payment_done' | 'under_xen_review' | 'forwarded_to_wing' | 'team_sent' | 'connection_completed' | 'implemented' | 'rejected';
     paymentStatus: 'pending' | 'paid';
     feeAmount: number;
     assignedMeterNo: string | null;
@@ -90,8 +87,8 @@ const StatCard = ({ title, value, icon, bgColor, change, trend }: StatCardProps)
                 <p className="text-2xl font-bold text-gray-800 mt-1">{value}</p>
                 {change && (
                     <p className={`text-xs flex items-center mt-1 ${trend === 'up' ? 'text-green-600' :
-                            trend === 'down' ? 'text-red-600' :
-                                'text-gray-500'
+                        trend === 'down' ? 'text-red-600' :
+                            'text-gray-500'
                         }`}>
                         {trend === 'up' && <TrendingUp size={14} className="mr-1" />}
                         {trend === 'down' && <TrendingDown size={14} className="mr-1" />}
@@ -109,22 +106,22 @@ const StatCard = ({ title, value, icon, bgColor, change, trend }: StatCardProps)
 export default function XenDashboardPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [applications, setApplications] = useState<ConnectionApplication[]>([]);
     const [selectedApp, setSelectedApp] = useState<ConnectionApplication | null>(null);
     const [showDetailsModal, setShowDetailsModal] = useState(false);
-    const [showReviewModal, setShowReviewModal] = useState(false);
-    const [reviewAction, setReviewAction] = useState<'approve' | 'reject' | null>(null);
-    const [reviewRemarks, setReviewRemarks] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [stats, setStats] = useState({
         total: 0,
-        pending: 0,
-        approved: 0,
-        rejected: 0,
+        paymentDone: 0,
+        underReview: 0,
+        forwardedToWing: 0,
+        teamSent: 0,
+        connectionCompleted: 0,
         implemented: 0,
+        rejected: 0,
     });
     const [user, setUser] = useState<any>(null);
 
@@ -151,6 +148,7 @@ export default function XenDashboardPage() {
 
     const fetchApplications = async () => {
         setLoading(true);
+        setError(null);
         try {
             const token = localStorage.getItem('auth_token');
             const response = await fetch(
@@ -162,210 +160,65 @@ export default function XenDashboardPage() {
                 }
             );
 
-            const data = await response.json();
-
             if (!response.ok) {
-                throw new Error(data.message || 'Failed to fetch applications');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch applications');
             }
 
+            const data = await response.json();
             const apps = data.data || [];
+            setApplications(apps);
 
-            // ✅ Filter: Only show applications that have payment done
-            const filteredApps = apps.filter((app: ConnectionApplication) =>
-                app.status === 'payment_done' ||
-                app.status === 'under_xen_review' ||
-                app.status === 'forwarded_to_wing' ||
-                app.status === 'implemented' ||
-                app.status === 'rejected'
-            );
-
-            setApplications(filteredApps);
-
-            // Update stats
-            const total = filteredApps.length;
-            const pending = filteredApps.filter((a: ConnectionApplication) => a.status === 'payment_done').length;
-            const underReview = filteredApps.filter((a: ConnectionApplication) => a.status === 'under_xen_review').length;
-            const approved = filteredApps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
-            const rejected = filteredApps.filter((a: ConnectionApplication) => a.status === 'rejected').length;
-            const implemented = filteredApps.filter((a: ConnectionApplication) => a.status === 'implemented').length;
+            const total = apps.length;
+            const paymentDone = apps.filter((a: ConnectionApplication) => a.status === 'payment_done').length;
+            const underReview = apps.filter((a: ConnectionApplication) => a.status === 'under_xen_review').length;
+            const forwardedToWing = apps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
+            const teamSent = apps.filter((a: ConnectionApplication) => a.status === 'team_sent').length;
+            const connectionCompleted = apps.filter((a: ConnectionApplication) => a.status === 'connection_completed').length;
+            const implemented = apps.filter((a: ConnectionApplication) => a.status === 'implemented').length;
+            const rejected = apps.filter((a: ConnectionApplication) => a.status === 'rejected').length;
 
             setStats({
                 total,
-                pending: pending + underReview,
-                approved,
-                rejected,
+                paymentDone,
+                underReview,
+                forwardedToWing,
+                teamSent,
+                connectionCompleted,
                 implemented,
+                rejected,
             });
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching applications:', error);
-            // Use mock data on error
-            const mockApps = getMockApplications();
-            setApplications(mockApps);
-            const total = mockApps.length;
-            const pending = mockApps.filter((a: ConnectionApplication) => a.status === 'payment_done').length;
-            const underReview = mockApps.filter((a: ConnectionApplication) => a.status === 'under_xen_review').length;
-            const approved = mockApps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
-            const rejected = mockApps.filter((a: ConnectionApplication) => a.status === 'rejected').length;
-            const implemented = mockApps.filter((a: ConnectionApplication) => a.status === 'implemented').length;
-
+            setError(error.message || 'Failed to load applications');
+            setApplications([]);
             setStats({
-                total,
-                pending: pending + underReview,
-                approved,
-                rejected,
-                implemented,
+                total: 0,
+                paymentDone: 0,
+                underReview: 0,
+                forwardedToWing: 0,
+                teamSent: 0,
+                connectionCompleted: 0,
+                implemented: 0,
+                rejected: 0,
             });
         } finally {
             setLoading(false);
         }
     };
 
-    const getMockApplications = (): ConnectionApplication[] => {
-        return [
-            {
-                applicationId: 'APP-2026-8835',
-                applicantName: 'Md. Kamal Hossain',
-                email: 'kamal@example.com',
-                mobile: '01712345678',
-                nidNo: '12345678901234567',
-                address: 'House #12, Road #5, Trimohoni, Kushtia',
-                connectionType: 'residential',
-                loadRequired: 5,
-                voltageLevel: '220',
-                purpose: 'New house construction',
-                feederName: 'Trimohoni',
-                transformerNo: 'TR-01',
-                poleNumber: 'P-123',
-                nearestLandmark: 'Near Trimohoni Bazar',
-                consumerId: 'user123',
-                status: 'payment_done',
-                paymentStatus: 'paid',
-                feeAmount: 5000,
-                assignedMeterNo: null,
-                implementedAt: null,
-                xenRemarks: null,
-                connectionWingRemarks: null,
-                createdAt: '2026-07-10T10:00:00Z',
-                updatedAt: '2026-07-10T10:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8836',
-                applicantName: 'Ms. Fatema Begum',
-                email: 'fatema@example.com',
-                mobile: '01712345679',
-                nidNo: '12345678901234568',
-                address: 'House #5, Circuit-Hose, Kushtia',
-                connectionType: 'commercial',
-                loadRequired: 15,
-                voltageLevel: '380',
-                purpose: 'New retail shop',
-                feederName: 'Circuit-Hose',
-                transformerNo: 'TR-03',
-                poleNumber: 'P-456',
-                nearestLandmark: 'Near Circuit-Hose School',
-                consumerId: 'user124',
-                status: 'under_xen_review',
-                paymentStatus: 'paid',
-                feeAmount: 10000,
-                assignedMeterNo: null,
-                implementedAt: null,
-                xenRemarks: null,
-                connectionWingRemarks: null,
-                createdAt: '2026-07-09T14:30:00Z',
-                updatedAt: '2026-07-09T14:30:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8837',
-                applicantName: 'Md. Rahim Uddin',
-                email: 'rahim@example.com',
-                mobile: '01712345680',
-                nidNo: '12345678901234569',
-                address: 'Plot #10, DC-Court, Kushtia',
-                connectionType: 'industrial',
-                loadRequired: 30,
-                voltageLevel: '11000',
-                purpose: 'Small factory',
-                feederName: 'DC-Court',
-                transformerNo: 'TR-02',
-                poleNumber: 'P-789',
-                nearestLandmark: 'Opposite DC-Court',
-                consumerId: 'user125',
-                status: 'forwarded_to_wing',
-                paymentStatus: 'paid',
-                feeAmount: 15000,
-                assignedMeterNo: 'MTR-2026-010',
-                implementedAt: null,
-                xenRemarks: 'Approved. Send to connection wing.',
-                connectionWingRemarks: null,
-                createdAt: '2026-07-08T09:15:00Z',
-                updatedAt: '2026-07-09T11:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8838',
-                applicantName: 'Ms. Nasrin Akter',
-                email: 'nasrin@example.com',
-                mobile: '01712345681',
-                nidNo: '12345678901234570',
-                address: 'House #20, N.S-Road, Kushtia',
-                connectionType: 'residential',
-                loadRequired: 3,
-                voltageLevel: '220',
-                purpose: 'New apartment',
-                feederName: 'N.S-Road',
-                transformerNo: 'TR-05',
-                poleNumber: 'P-321',
-                nearestLandmark: 'Near N.S-Road Market',
-                consumerId: 'user126',
-                status: 'implemented',
-                paymentStatus: 'paid',
-                feeAmount: 5000,
-                assignedMeterNo: 'MTR-2026-011',
-                implementedAt: '2026-07-10T08:00:00Z',
-                xenRemarks: 'Approved. Implemented.',
-                connectionWingRemarks: 'Connection completed.',
-                createdAt: '2026-07-05T16:45:00Z',
-                updatedAt: '2026-07-10T08:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8839',
-                applicantName: 'Md. Shafiqul Islam',
-                email: 'shafiq@example.com',
-                mobile: '01712345682',
-                nidNo: '12345678901234571',
-                address: 'House #8, Trimohoni, Kushtia',
-                connectionType: 'commercial',
-                loadRequired: 10,
-                voltageLevel: '380',
-                purpose: 'Restaurant',
-                feederName: 'Trimohoni',
-                transformerNo: 'TR-01',
-                poleNumber: 'P-654',
-                nearestLandmark: 'Near Trimohoni Bridge',
-                consumerId: 'user127',
-                status: 'rejected',
-                paymentStatus: 'paid',
-                feeAmount: 10000,
-                assignedMeterNo: null,
-                implementedAt: null,
-                xenRemarks: 'Insufficient load capacity in the area.',
-                connectionWingRemarks: null,
-                createdAt: '2026-07-07T11:30:00Z',
-                updatedAt: '2026-07-08T09:00:00Z',
-            },
-        ];
-    };
-
     const getStatusBadge = (status: string) => {
         const statuses: Record<string, { color: string; label: string; icon: any }> = {
-            pending_payment: { color: 'bg-yellow-100 text-yellow-700', label: 'Pending Payment', icon: Clock },
             payment_done: { color: 'bg-blue-100 text-blue-700', label: 'Payment Done', icon: CheckCircle },
             under_xen_review: { color: 'bg-purple-100 text-purple-700', label: 'Under Review', icon: Loader2 },
-            forwarded_to_wing: { color: 'bg-orange-100 text-orange-700', label: 'Forwarded to Wing', icon: Send },
-            implemented: { color: 'bg-green-100 text-green-700', label: 'Implemented', icon: CheckCircle },
+            forwarded_to_wing: { color: 'bg-indigo-100 text-indigo-700', label: 'Forwarded to Wing', icon: Send },
+            team_sent: { color: 'bg-purple-100 text-purple-700', label: 'Team Sent', icon: Send },
+            connection_completed: { color: 'bg-orange-100 text-orange-700', label: 'Connection Completed', icon: CheckCircle },
+            implemented: { color: 'bg-green-100 text-green-700', label: '✅ Implemented', icon: CheckCircle },
             rejected: { color: 'bg-red-100 text-red-700', label: 'Rejected', icon: XCircle },
         };
-        return statuses[status] || statuses.pending_payment;
+        return statuses[status] || statuses.payment_done;
     };
 
     const getConnectionTypeLabel = (type: string) => {
@@ -377,82 +230,10 @@ export default function XenDashboardPage() {
         return types[type] || type;
     };
 
-    const handleReview = (app: ConnectionApplication, action: 'approve' | 'reject') => {
-        setSelectedApp(app);
-        setReviewAction(action);
-        setReviewRemarks('');
-        setShowReviewModal(true);
-    };
-
-    const submitReview = async () => {
-        if (!selectedApp) return;
-        setIsSubmitting(true);
-
-        try {
-            const token = localStorage.getItem('auth_token');
-
-            // Determine new status
-            let newStatus = '';
-            if (reviewAction === 'approve') {
-                newStatus = 'forwarded_to_wing';
-            } else {
-                newStatus = 'rejected';
-            }
-
-            const response = await fetch(
-                `${API_URL}/api/connection-applications/${selectedApp.applicationId}/status`,
-                {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token ? `Bearer ${token}` : '',
-                    },
-                    body: JSON.stringify({
-                        status: newStatus,
-                        xenRemarks: reviewRemarks || (reviewAction === 'approve' ? 'Approved for implementation' : 'Rejected'),
-                    }),
-                }
-            );
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || 'Failed to update status');
-            }
-
-            // Refresh applications
-            await fetchApplications();
-
-            setShowReviewModal(false);
-            setSelectedApp(null);
-            setReviewAction(null);
-            setReviewRemarks('');
-
-        } catch (error) {
-            console.error('Review error:', error);
-            alert('Failed to submit review. Please try again.');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const getStatusBadgeForDetails = (status: string) => {
-        const statuses: Record<string, { color: string; label: string }> = {
-            pending_payment: { color: 'bg-yellow-100 text-yellow-700', label: 'Pending Payment' },
-            payment_done: { color: 'bg-blue-100 text-blue-700', label: 'Payment Done' },
-            under_xen_review: { color: 'bg-purple-100 text-purple-700', label: 'Under XEN Review' },
-            forwarded_to_wing: { color: 'bg-orange-100 text-orange-700', label: 'Forwarded to Wing' },
-            implemented: { color: 'bg-green-100 text-green-700', label: 'Implemented' },
-            rejected: { color: 'bg-red-100 text-red-700', label: 'Rejected' },
-        };
-        return statuses[status] || statuses.pending_payment;
-    };
-
     const filteredApplications = applications.filter(app => {
         const matchesSearch = app.applicationId.toLowerCase().includes(searchTerm.toLowerCase()) ||
             app.applicantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            app.mobile.includes(searchTerm) ||
-            app.address.toLowerCase().includes(searchTerm.toLowerCase());
+            app.mobile.includes(searchTerm);
         const matchesStatus = filterStatus === 'all' || app.status === filterStatus;
         return matchesSearch && matchesStatus;
     });
@@ -464,11 +245,14 @@ export default function XenDashboardPage() {
     );
 
     const statCards = [
-        { title: 'Total Applications', value: stats.total, icon: FileText, bgColor: 'bg-blue-100', change: '', trend: 'neutral' as const },
-        { title: 'Pending Review', value: stats.pending, icon: Clock, bgColor: 'bg-yellow-100', change: `${stats.pending} waiting`, trend: 'down' as const },
-        { title: 'Approved', value: stats.approved, icon: ThumbsUp, bgColor: 'bg-green-100', change: `${stats.approved} forwarded`, trend: 'up' as const },
-        { title: 'Rejected', value: stats.rejected, icon: ThumbsDown, bgColor: 'bg-red-100', change: `${stats.rejected} rejected`, trend: 'down' as const },
-        { title: 'Implemented', value: stats.implemented, icon: CheckCircle, bgColor: 'bg-emerald-100', change: `${stats.implemented} completed`, trend: 'up' as const },
+        { title: 'Total', value: stats.total, icon: FileText, bgColor: 'bg-blue-100', change: '', trend: 'neutral' as const },
+        { title: 'Payment Done', value: stats.paymentDone, icon: CheckCircle, bgColor: 'bg-blue-100', change: `${stats.paymentDone} paid`, trend: 'up' as const },
+        { title: 'Under Review', value: stats.underReview, icon: Loader2, bgColor: 'bg-purple-100', change: `${stats.underReview} pending`, trend: 'neutral' as const },
+        { title: 'Forwarded to Wing', value: stats.forwardedToWing, icon: Send, bgColor: 'bg-indigo-100', change: `${stats.forwardedToWing} sent`, trend: 'up' as const },
+        { title: 'Team Sent', value: stats.teamSent, icon: Send, bgColor: 'bg-purple-100', change: `${stats.teamSent} dispatched`, trend: 'neutral' as const },
+        { title: 'Connection Completed', value: stats.connectionCompleted, icon: CheckCircle, bgColor: 'bg-orange-100', change: `${stats.connectionCompleted} done`, trend: 'up' as const },
+        { title: 'Implemented', value: stats.implemented, icon: CheckCircle, bgColor: 'bg-green-100', change: `${stats.implemented} active`, trend: 'up' as const },
+        { title: 'Rejected', value: stats.rejected, icon: XCircle, bgColor: 'bg-red-100', change: `${stats.rejected} rejected`, trend: 'down' as const },
     ];
 
     if (loading) {
@@ -479,16 +263,30 @@ export default function XenDashboardPage() {
         );
     }
 
+    if (error) {
+        return (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+                <AlertTriangle size={40} className="text-red-500 mx-auto mb-2" />
+                <p className="text-red-600">{error}</p>
+                <button
+                    onClick={fetchApplications}
+                    className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                    Try Again
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
-            {/* Page Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800 flex items-center space-x-2">
                         <Zap size={24} className="text-emerald-600" />
                         <span>XEN Dashboard</span>
                     </h1>
-                    <p className="text-gray-500 text-sm">Review and manage new connection applications</p>
+                    <p className="text-gray-500 text-sm">Monitor all connection applications progress</p>
                 </div>
                 <div className="flex items-center space-x-3">
                     <button
@@ -499,17 +297,16 @@ export default function XenDashboardPage() {
                         <span>Refresh</span>
                     </button>
                     <button
-                        onClick={() => router.push('/dashboard/xen/all-transactions')}
-                        className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                        onClick={() => router.push('/dashboard/xen/new-connection-applications')}
+                        className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-2"
                     >
                         <FileText size={16} />
-                        <span>Transactions</span>
+                        <span>Review Applications</span>
                     </button>
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {statCards.map((stat, index) => {
                     const Icon = stat.icon;
                     return (
@@ -528,14 +325,62 @@ export default function XenDashboardPage() {
                 })}
             </div>
 
-            {/* Search and Filters */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h3 className="font-semibold text-gray-800 mb-4">Application Progress Overview</h3>
+                <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
+                    <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <p className="text-2xl font-bold text-blue-600">{stats.paymentDone}</p>
+                        <p className="text-xs text-gray-500">Payment Done</p>
+                    </div>
+                    <div className="flex items-center justify-center text-gray-400">
+                        <ArrowRight size={20} />
+                    </div>
+                    <div className="text-center p-3 bg-purple-50 rounded-lg border border-purple-200">
+                        <p className="text-2xl font-bold text-purple-600">{stats.underReview}</p>
+                        <p className="text-xs text-gray-500">Under Review</p>
+                    </div>
+                    <div className="flex items-center justify-center text-gray-400">
+                        <ArrowRight size={20} />
+                    </div>
+                    <div className="text-center p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                        <p className="text-2xl font-bold text-indigo-600">{stats.forwardedToWing}</p>
+                        <p className="text-xs text-gray-500">Forwarded to Wing</p>
+                    </div>
+                    <div className="flex items-center justify-center text-gray-400">
+                        <ArrowRight size={20} />
+                    </div>
+                    <div className="text-center p-3 bg-purple-50 rounded-lg border border-purple-200">
+                        <p className="text-2xl font-bold text-purple-600">{stats.teamSent}</p>
+                        <p className="text-xs text-gray-500">Team Sent</p>
+                    </div>
+                    <div className="flex items-center justify-center text-gray-400">
+                        <ArrowRight size={20} />
+                    </div>
+                    <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-200">
+                        <p className="text-2xl font-bold text-orange-600">{stats.connectionCompleted}</p>
+                        <p className="text-xs text-gray-500">Connection Completed</p>
+                    </div>
+                    <div className="flex items-center justify-center text-gray-400">
+                        <ArrowRight size={20} />
+                    </div>
+                    <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
+                        <p className="text-2xl font-bold text-green-600">{stats.implemented}</p>
+                        <p className="text-xs text-gray-500">Implemented</p>
+                    </div>
+                </div>
+                <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
+                    <span>Total: {stats.total} applications</span>
+                    <span>Completion Rate: {stats.total > 0 ? Math.round((stats.implemented / stats.total) * 100) : 0}%</span>
+                </div>
+            </div>
+
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
                 <div className="flex flex-col sm:flex-row gap-4">
                     <div className="relative flex-1">
                         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
                             type="text"
-                            placeholder="Search by application ID, name, mobile, or address..."
+                            placeholder="Search by application ID, name, or mobile..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -551,6 +396,8 @@ export default function XenDashboardPage() {
                             <option value="payment_done">Payment Done</option>
                             <option value="under_xen_review">Under Review</option>
                             <option value="forwarded_to_wing">Forwarded to Wing</option>
+                            <option value="team_sent">Team Sent</option>
+                            <option value="connection_completed">Connection Completed</option>
                             <option value="implemented">Implemented</option>
                             <option value="rejected">Rejected</option>
                         </select>
@@ -568,7 +415,6 @@ export default function XenDashboardPage() {
                 </div>
             </div>
 
-            {/* Applications Table */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full">
@@ -578,7 +424,6 @@ export default function XenDashboardPage() {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Applicant</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Load</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
                             </tr>
@@ -586,7 +431,7 @@ export default function XenDashboardPage() {
                         <tbody className="divide-y divide-gray-100">
                             {paginatedApps.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                                         No applications found.
                                     </td>
                                 </tr>
@@ -611,51 +456,22 @@ export default function XenDashboardPage() {
                                                 <span className="text-sm text-gray-600">{app.loadRequired} kW</span>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className="text-sm font-medium text-gray-800">৳{app.feeAmount.toLocaleString()}</span>
-                                            </td>
-                                            <td className="px-6 py-4">
                                                 <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center space-x-1 w-fit ${StatusBadge.color}`}>
                                                     <StatusIcon size={12} />
                                                     <span>{StatusBadge.label}</span>
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="flex items-center justify-center space-x-2">
-                                                    <button
-                                                        onClick={() => {
-                                                            setSelectedApp(app);
-                                                            setShowDetailsModal(true);
-                                                        }}
-                                                        className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-                                                        title="View Details"
-                                                    >
-                                                        <Eye size={16} className="text-gray-500" />
-                                                    </button>
-                                                    {app.status === 'payment_done' && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleReview(app, 'approve')}
-                                                                className="p-1.5 hover:bg-green-100 rounded-lg transition-colors"
-                                                                title="Approve"
-                                                            >
-                                                                <ThumbsUp size={16} className="text-green-600" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleReview(app, 'reject')}
-                                                                className="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
-                                                                title="Reject"
-                                                            >
-                                                                <ThumbsDown size={16} className="text-red-600" />
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                    {app.status === 'under_xen_review' && (
-                                                        <span className="text-xs text-purple-600 font-medium">Under Review</span>
-                                                    )}
-                                                    {app.status === 'forwarded_to_wing' && (
-                                                        <span className="text-xs text-orange-600 font-medium">Forwarded</span>
-                                                    )}
-                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedApp(app);
+                                                        setShowDetailsModal(true);
+                                                    }}
+                                                    className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                                                    title="View Details"
+                                                >
+                                                    <Eye size={16} className="text-gray-500" />
+                                                </button>
                                             </td>
                                         </tr>
                                     );
@@ -665,7 +481,6 @@ export default function XenDashboardPage() {
                     </table>
                 </div>
 
-                {/* Pagination */}
                 {totalPages > 1 && (
                     <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
                         <p className="text-sm text-gray-500">
@@ -684,8 +499,8 @@ export default function XenDashboardPage() {
                                     key={page}
                                     onClick={() => setCurrentPage(page)}
                                     className={`px-3 py-1 rounded-lg text-sm transition-colors ${currentPage === page
-                                            ? 'bg-emerald-600 text-white'
-                                            : 'border border-gray-200 hover:bg-gray-50'
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'border border-gray-200 hover:bg-gray-50'
                                         }`}
                                 >
                                     {page}
@@ -703,7 +518,6 @@ export default function XenDashboardPage() {
                 )}
             </div>
 
-            {/* Application Details Modal */}
             {showDetailsModal && selectedApp && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
@@ -714,231 +528,38 @@ export default function XenDashboardPage() {
                                 </div>
                                 <h3 className="text-lg font-semibold text-gray-800">Application Details</h3>
                             </div>
-                            <button
-                                onClick={() => setShowDetailsModal(false)}
-                                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-                            >
+                            <button onClick={() => setShowDetailsModal(false)} className="p-1 hover:bg-gray-100 rounded-lg">
                                 <X size={20} className="text-gray-500" />
                             </button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <p className="text-xs text-gray-500">Application ID</p>
-                                <p className="text-sm font-medium">{selectedApp.applicationId}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">Status</p>
-                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(selectedApp.status).color}`}>
-                                    {getStatusBadge(selectedApp.status).label}
-                                </span>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">Applicant Name</p>
-                                <p className="text-sm font-medium">{selectedApp.applicantName}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">Connection Type</p>
-                                <p className="text-sm font-medium">{getConnectionTypeLabel(selectedApp.connectionType)}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">Mobile</p>
-                                <p className="text-sm font-medium">{selectedApp.mobile}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">Email</p>
-                                <p className="text-sm font-medium">{selectedApp.email}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">NID</p>
-                                <p className="text-sm font-medium">{selectedApp.nidNo}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">Load Required</p>
-                                <p className="text-sm font-medium">{selectedApp.loadRequired} kW</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">Voltage Level</p>
-                                <p className="text-sm font-medium">{selectedApp.voltageLevel}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">Feeder</p>
-                                <p className="text-sm font-medium">{selectedApp.feederName}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">Transformer</p>
-                                <p className="text-sm font-medium">{selectedApp.transformerNo || 'N/A'}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500">Pole Number</p>
-                                <p className="text-sm font-medium">{selectedApp.poleNumber || 'N/A'}</p>
-                            </div>
-                            <div className="col-span-2">
-                                <p className="text-xs text-gray-500">Address</p>
-                                <p className="text-sm font-medium">{selectedApp.address}</p>
-                            </div>
-                            <div className="col-span-2">
-                                <p className="text-xs text-gray-500">Purpose</p>
-                                <p className="text-sm font-medium">{selectedApp.purpose}</p>
-                            </div>
+                            <div><p className="text-xs text-gray-500">Application ID</p><p className="text-sm font-medium">{selectedApp.applicationId}</p></div>
+                            <div><p className="text-xs text-gray-500">Status</p><span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(selectedApp.status).color}`}>{getStatusBadge(selectedApp.status).label}</span></div>
+                            <div><p className="text-xs text-gray-500">Applicant</p><p className="text-sm font-medium">{selectedApp.applicantName}</p></div>
+                            <div><p className="text-xs text-gray-500">Type</p><p className="text-sm font-medium">{getConnectionTypeLabel(selectedApp.connectionType)}</p></div>
+                            <div><p className="text-xs text-gray-500">Mobile</p><p className="text-sm font-medium">{selectedApp.mobile}</p></div>
+                            <div><p className="text-xs text-gray-500">Email</p><p className="text-sm font-medium">{selectedApp.email}</p></div>
+                            <div><p className="text-xs text-gray-500">Load</p><p className="text-sm font-medium">{selectedApp.loadRequired} kW</p></div>
+                            <div><p className="text-xs text-gray-500">Feeder</p><p className="text-sm font-medium">{selectedApp.feederName}</p></div>
+                            <div className="col-span-2"><p className="text-xs text-gray-500">Address</p><p className="text-sm font-medium">{selectedApp.address}</p></div>
                             {selectedApp.xenRemarks && (
-                                <div className="col-span-2">
-                                    <p className="text-xs text-gray-500">XEN Remarks</p>
-                                    <p className="text-sm text-gray-600">{selectedApp.xenRemarks}</p>
-                                </div>
+                                <div className="col-span-2"><p className="text-xs text-gray-500">XEN Remarks</p><p className="text-sm text-gray-600">{selectedApp.xenRemarks}</p></div>
                             )}
                             {selectedApp.connectionWingRemarks && (
-                                <div className="col-span-2">
-                                    <p className="text-xs text-gray-500">Wing Remarks</p>
-                                    <p className="text-sm text-gray-600">{selectedApp.connectionWingRemarks}</p>
-                                </div>
+                                <div className="col-span-2"><p className="text-xs text-gray-500">Wing Remarks</p><p className="text-sm text-gray-600">{selectedApp.connectionWingRemarks}</p></div>
                             )}
                             {selectedApp.assignedMeterNo && (
-                                <div className="col-span-2">
-                                    <p className="text-xs text-gray-500">Assigned Meter</p>
-                                    <p className="text-sm font-bold text-emerald-600">{selectedApp.assignedMeterNo}</p>
-                                </div>
+                                <div className="col-span-2"><p className="text-xs text-gray-500">Assigned Meter</p><p className="text-sm font-bold text-emerald-600">{selectedApp.assignedMeterNo}</p></div>
                             )}
-                            <div>
-                                <p className="text-xs text-gray-500">Created At</p>
-                                <p className="text-sm text-gray-600">{new Date(selectedApp.createdAt).toLocaleString()}</p>
-                            </div>
+                            <div><p className="text-xs text-gray-500">Created</p><p className="text-sm text-gray-600">{new Date(selectedApp.createdAt).toLocaleString()}</p></div>
                             {selectedApp.implementedAt && (
-                                <div>
-                                    <p className="text-xs text-gray-500">Implemented At</p>
-                                    <p className="text-sm text-green-600">{new Date(selectedApp.implementedAt).toLocaleString()}</p>
-                                </div>
+                                <div><p className="text-xs text-gray-500">Implemented</p><p className="text-sm text-green-600">{new Date(selectedApp.implementedAt).toLocaleString()}</p></div>
                             )}
                         </div>
 
                         <div className="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-100">
-                            {selectedApp.status === 'payment_done' && (
-                                <>
-                                    <button
-                                        onClick={() => {
-                                            setShowDetailsModal(false);
-                                            handleReview(selectedApp, 'reject');
-                                        }}
-                                        className="px-4 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                                    >
-                                        <ThumbsDown size={16} className="inline mr-1" />
-                                        Reject
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setShowDetailsModal(false);
-                                            handleReview(selectedApp, 'approve');
-                                        }}
-                                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                                    >
-                                        <ThumbsUp size={16} className="inline mr-1" />
-                                        Approve
-                                    </button>
-                                </>
-                            )}
-                            <button
-                                onClick={() => setShowDetailsModal(false)}
-                                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Review Modal */}
-            {showReviewModal && selectedApp && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center space-x-3">
-                                <div className={`p-2 rounded-full ${reviewAction === 'approve' ? 'bg-green-100' : 'bg-red-100'
-                                    }`}>
-                                    {reviewAction === 'approve' ? (
-                                        <ThumbsUp size={20} className="text-green-600" />
-                                    ) : (
-                                        <ThumbsDown size={20} className="text-red-600" />
-                                    )}
-                                </div>
-                                <h3 className="text-lg font-semibold text-gray-800">
-                                    {reviewAction === 'approve' ? 'Approve Application' : 'Reject Application'}
-                                </h3>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    setShowReviewModal(false);
-                                    setSelectedApp(null);
-                                    setReviewAction(null);
-                                }}
-                                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-                            >
-                                <X size={20} className="text-gray-500" />
-                            </button>
-                        </div>
-
-                        <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                            <p className="text-sm text-gray-600">
-                                <span className="font-medium">Application:</span> {selectedApp.applicationId}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                                <span className="font-medium">Applicant:</span> {selectedApp.applicantName}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                                <span className="font-medium">Type:</span> {getConnectionTypeLabel(selectedApp.connectionType)}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                                <span className="font-medium">Load:</span> {selectedApp.loadRequired} kW
-                            </p>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                Remarks <span className="text-gray-400 text-xs">(Optional)</span>
-                            </label>
-                            <textarea
-                                value={reviewRemarks}
-                                onChange={(e) => setReviewRemarks(e.target.value)}
-                                rows={3}
-                                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                placeholder={reviewAction === 'approve' ?
-                                    'Add any notes for approval...' :
-                                    'Reason for rejection...'
-                                }
-                            />
-                        </div>
-
-                        <div className="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-100">
-                            <button
-                                onClick={() => {
-                                    setShowReviewModal(false);
-                                    setSelectedApp(null);
-                                    setReviewAction(null);
-                                }}
-                                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={submitReview}
-                                disabled={isSubmitting}
-                                className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${reviewAction === 'approve'
-                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                        : 'bg-red-600 hover:bg-red-700 text-white'
-                                    } ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
-                            >
-                                {isSubmitting ? (
-                                    <>
-                                        <Loader2 size={16} className="animate-spin" />
-                                        <span>Processing...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        {reviewAction === 'approve' ? <ThumbsUp size={16} /> : <ThumbsDown size={16} />}
-                                        <span>{reviewAction === 'approve' ? 'Approve' : 'Reject'}</span>
-                                    </>
-                                )}
-                            </button>
+                            <button onClick={() => setShowDetailsModal(false)} className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">Close</button>
                         </div>
                     </div>
                 </div>

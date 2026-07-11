@@ -51,7 +51,6 @@ const Navbar = () => {
             try {
                 const { data } = await authClient.getSession();
                 setUser(data?.user || null);
-                console.log('🔍 Navbar - User role:', data?.user?.role);
             } catch (error) {
                 console.error('Error fetching user:', error);
             } finally {
@@ -76,7 +75,7 @@ const Navbar = () => {
         return pathname?.startsWith(href);
     };
 
-    // ✅ Role-based dashboard path mapping
+    // ✅ Role-based dashboard path
     const getDashboardPath = (role: string) => {
         const paths: Record<string, string> = {
             admin: '/dashboard/admin',
@@ -89,7 +88,6 @@ const Navbar = () => {
         return paths[role] || '/dashboard/consumer';
     };
 
-    // ✅ Public navigation items
     const navItems: NavItem[] = [
         { id: 'home', label: 'Home', href: '/', icon: Home },
         {
@@ -177,7 +175,7 @@ const Navbar = () => {
                         {isOpen ? <X size={24} /> : <Menu size={24} />}
                     </button>
 
-                    {/* Desktop Navigation - Public Links */}
+                    {/* Desktop Navigation */}
                     <div className="hidden md:flex items-center space-x-1">
                         {navItems.map((item) => {
                             const Icon = item.icon;
@@ -239,9 +237,10 @@ const Navbar = () => {
                         })}
                     </div>
 
-                    {/* ✅ Auth Buttons - Desktop with Role-Based Dashboard */}
+                    {/* ✅ Auth Buttons - Role-Based Dashboard */}
                     <div className="hidden md:flex items-center space-x-3">
                         {!loading && !user ? (
+                            // Not Logged In
                             <>
                                 <Link
                                     href="/login"
@@ -259,6 +258,7 @@ const Navbar = () => {
                                 </Link>
                             </>
                         ) : user ? (
+                            // Logged In - Role-Based Dashboard
                             <div className="flex items-center space-x-3">
                                 <div className="flex items-center space-x-2 border-r border-emerald-600 pr-3">
                                     <div className={`w-7 h-7 rounded-full ${getRoleColor(user.role)} flex items-center justify-center text-xs font-bold`}>

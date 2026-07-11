@@ -113,6 +113,7 @@ export default function BillingWingsAllBillsPage() {
     });
     const [user, setUser] = useState<any>(null);
     const [selectedBills, setSelectedBills] = useState<string[]>([]);
+    const [error, setError] = useState<string | null>(null);
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
     const ITEMS_PER_PAGE = 10;
@@ -137,98 +138,50 @@ export default function BillingWingsAllBillsPage() {
 
     const fetchBills = async () => {
         setLoading(true);
+        setError(null);
         try {
             const token = localStorage.getItem('auth_token');
+
+            // Fetch all bills (pagination can be added later if needed, currently fetching all for stats)
             const response = await fetch(
-                `${API_URL}/api/billing/bills/all`,
+                `${API_URL}/api/billing/bills/all?limit=1000`,
                 {
                     headers: {
                         'Authorization': token ? `Bearer ${token}` : '',
+                        'Content-Type': 'application/json',
                     },
                 }
             );
 
-            let data;
-            if (response.ok) {
-                data = await response.json();
-                if (data.data && data.data.length > 0) {
-                    setBills(data.data);
-                    updateStats(data.data);
-                    setLoading(false);
-                    return;
-                }
+            if (!response.ok) {
+                throw new Error('Failed to fetch bills');
             }
 
-            // Mock data fallback
-            const mockBills = getMockBills();
-            setBills(mockBills);
-            updateStats(mockBills);
+            const result = await response.json();
+
+            if (result.success && result.data) {
+                setBills(result.data);
+                updateStats(result.data);
+            } else {
+                setBills([]);
+                updateStats([]);
+            }
 
         } catch (error) {
             console.error('Error fetching bills:', error);
-            const mockBills = getMockBills();
-            setBills(mockBills);
-            updateStats(mockBills);
+            setError('Failed to load bills. Please try again.');
+            setBills([]);
+            updateStats([]);
         } finally {
             setLoading(false);
         }
     };
 
-    const getMockBills = (): Bill[] => {
-        const months = ['June 2026', 'May 2026', 'April 2026', 'March 2026', 'February 2026', 'January 2026'];
-        const consumers = [
-            { name: 'John Doe', meter: 'MTR-2026-001', type: 'residential' },
-            { name: 'Jane Smith', meter: 'MTR-2026-002', type: 'commercial' },
-            { name: 'Robert Johnson', meter: 'MTR-2026-003', type: 'industrial' },
-            { name: 'Emily Davis', meter: 'MTR-2026-004', type: 'residential' },
-            { name: 'Michael Brown', meter: 'MTR-2026-005', type: 'commercial' },
-            { name: 'Sarah Wilson', meter: 'MTR-2026-006', type: 'residential' },
-            { name: 'David Lee', meter: 'MTR-2026-007', type: 'commercial' },
-            { name: 'Lisa Kim', meter: 'MTR-2026-008', type: 'industrial' },
-            { name: 'James Taylor', meter: 'MTR-2026-009', type: 'residential' },
-            { name: 'Maria Garcia', meter: 'MTR-2026-010', type: 'commercial' },
-        ];
-
-        const statuses: ('paid' | 'unpaid' | 'pending')[] = ['paid', 'unpaid', 'pending'];
-        const rates = { residential: 7.50, commercial: 9.75, industrial: 11.25 };
-
-        return consumers.map((consumer, index) => {
-            const monthIndex = Math.floor(Math.random() * months.length);
-            const status = statuses[Math.floor(Math.random() * statuses.length)];
-            const previousReading = Math.floor(Math.random() * 1000) + 500;
-            const currentReading = previousReading + Math.floor(Math.random() * 300) + 100;
-            const units = currentReading - previousReading;
-            const rate = rates[consumer.type as keyof typeof rates];
-            const amount = units * rate;
-
-            return {
-                billId: `B-2026-${String(index + 1).padStart(3, '0')}`,
-                meterNo: consumer.meter,
-                consumerName: consumer.name,
-                billingMonth: months[monthIndex],
-                consumerType: consumer.type as 'residential' | 'commercial' | 'industrial',
-                previousReading,
-                currentReading,
-                unitsConsumed: units,
-                ratePerUnit: rate,
-                totalAmount: amount,
-                dueDate: `2026-${String(monthIndex + 1).padStart(2, '0')}-15`,
-                status: status,
-                paidAt: status === 'paid' ? '2026-07-01 10:30 AM' : undefined,
-                paymentMethod: status === 'paid' ? 'Stripe' : undefined,
-                lateFee: status === 'unpaid' ? amount * 0.05 : 0,
-                vatAmount: 0,
-                createdAt: '2026-07-01 09:00 AM',
-                updatedAt: '2026-07-01 09:00 AM',
-            };
-        });
-    };
-
     const updateStats = (billsData: Bill[]) => {
         const total = billsData.length;
-        const totalAmount = billsData.reduce((sum, b) => sum + b.totalAmount, 0);
-        const paidAmount = billsData.filter(b => b.status === 'paid').reduce((sum, b) => sum + b.totalAmount, 0);
-        const unpaidAmount = billsData.filter(b => b.status === 'unpaid').reduce((sum, b) => sum + b.totalAmount, 0);
+        const totalAmount = billsData.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+        const paidAmount = billsData.filter(b => b.status === 'paid').reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+        const unpaidAmount = billsData.filter(b => b.status === 'unpaid').reduce((sum, b) => sum + (b.totalAmount || 0), 0);
         const paidCount = billsData.filter(b => b.status === 'paid').length;
         const unpaidCount = billsData.filter(b => b.status === 'unpaid').length;
         const pendingCount = billsData.filter(b => b.status === 'pending').length;
@@ -275,7 +228,7 @@ export default function BillingWingsAllBillsPage() {
 
     const getUniqueMonths = () => {
         const months = bills.map(b => b.billingMonth);
-        return ['all', ...new Set(months)];
+        return ['all', ...Array.from(new Set(months))];
     };
 
     const toggleSelectBill = (billId: string) => {
@@ -323,6 +276,21 @@ export default function BillingWingsAllBillsPage() {
         return (
             <div className="flex items-center justify-center h-64">
                 <Loader2 size={40} className="animate-spin text-emerald-600" />
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex flex-col items-center justify-center h-64 space-y-4">
+                <AlertCircle size={48} className="text-red-500" />
+                <p className="text-red-600 font-medium">{error}</p>
+                <button
+                    onClick={fetchBills}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                    Try Again
+                </button>
             </div>
         );
     }
@@ -485,7 +453,7 @@ export default function BillingWingsAllBillsPage() {
                             {paginatedBills.length === 0 ? (
                                 <tr>
                                     <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
-                                        No bills found.
+                                        No bills found matching your criteria.
                                     </td>
                                 </tr>
                             ) : (
@@ -494,7 +462,7 @@ export default function BillingWingsAllBillsPage() {
                                     const StatusIcon = StatusBadge.icon;
 
                                     return (
-                                        <tr key={bill.billId} className="hover:bg-gray-50 transition-colors">
+                                        <tr key={bill._id || bill.billId} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-4 py-3">
                                                 <input
                                                     type="checkbox"
@@ -571,8 +539,8 @@ export default function BillingWingsAllBillsPage() {
                                     key={page}
                                     onClick={() => setCurrentPage(page)}
                                     className={`px-3 py-1 rounded-lg text-sm transition-colors ${currentPage === page
-                                            ? 'bg-emerald-600 text-white'
-                                            : 'border border-gray-200 hover:bg-gray-50'
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'border border-gray-200 hover:bg-gray-50'
                                         }`}
                                 >
                                     {page}
@@ -659,7 +627,7 @@ export default function BillingWingsAllBillsPage() {
                             {selectedBill.paidAt && (
                                 <div>
                                     <p className="text-xs text-gray-500">Paid At</p>
-                                    <p className="text-sm font-medium text-green-600">{selectedBill.paidAt}</p>
+                                    <p className="text-sm font-medium text-green-600">{new Date(selectedBill.paidAt).toLocaleDateString()}</p>
                                 </div>
                             )}
                             {selectedBill.paymentMethod && (

@@ -37,6 +37,8 @@ import {
     ListChecks,
     AlertTriangle,
     Save,
+    Hourglass,
+    ShieldAlert,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -68,42 +70,10 @@ interface ConnectionApplication {
     updatedAt: string;
 }
 
-interface StatCardProps {
-    title: string;
-    value: string | number;
-    icon: React.ReactNode;
-    bgColor: string;
-    change?: string;
-    trend?: 'up' | 'down' | 'neutral';
-}
-
-const StatCard = ({ title, value, icon, bgColor, change, trend }: StatCardProps) => (
-    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
-        <div className="flex items-center justify-between">
-            <div>
-                <p className="text-sm text-gray-500 font-medium">{title}</p>
-                <p className="text-2xl font-bold text-gray-800 mt-1">{value}</p>
-                {change && (
-                    <p className={`text-xs flex items-center mt-1 ${trend === 'up' ? 'text-green-600' :
-                        trend === 'down' ? 'text-red-600' :
-                            'text-gray-500'
-                        }`}>
-                        {trend === 'up' && <TrendingUp size={14} className="mr-1" />}
-                        {trend === 'down' && <TrendingDown size={14} className="mr-1" />}
-                        {change}
-                    </p>
-                )}
-            </div>
-            <div className={`p-3 rounded-xl ${bgColor}`}>
-                {icon}
-            </div>
-        </div>
-    </div>
-);
-
 export default function ConnectionWingApplicationsPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [applications, setApplications] = useState<ConnectionApplication[]>([]);
     const [selectedApp, setSelectedApp] = useState<ConnectionApplication | null>(null);
     const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -118,14 +88,15 @@ export default function ConnectionWingApplicationsPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [stats, setStats] = useState({
         total: 0,
-        newAssignments: 0,
-        inProgress: 0,
+        pendingXenApproval: 0,
+        forwardedToWing: 0,
+        teamSent: 0,
         completed: 0,
+        implemented: 0,
         rejected: 0,
     });
     const [user, setUser] = useState<any>(null);
 
-    // Meter assignment form
     const [meterForm, setMeterForm] = useState({
         meterNo: '',
         initialReading: '',
@@ -156,201 +127,66 @@ export default function ConnectionWingApplicationsPage() {
 
     const fetchApplications = async () => {
         setLoading(true);
+        setError(null);
         try {
             const token = localStorage.getItem('auth_token');
+
             const response = await fetch(
                 `${API_URL}/api/connection-wing/applications`,
                 {
                     headers: {
                         'Authorization': token ? `Bearer ${token}` : '',
+                        'Content-Type': 'application/json',
                     },
                 }
             );
 
-            const data = await response.json();
-
             if (!response.ok) {
-                throw new Error(data.message || 'Failed to fetch applications');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch applications');
             }
 
+            const data = await response.json();
             const apps = data.data || [];
             setApplications(apps);
 
             const total = apps.length;
-            const newAssignments = apps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
-            const inProgress = apps.filter((a: ConnectionApplication) => a.status === 'team_sent').length;
-            const completed = apps.filter((a: ConnectionApplication) => a.status === 'connection_completed' || a.status === 'implemented').length;
+            const pendingXenApproval = apps.filter((a: ConnectionApplication) =>
+                a.status === 'pending_payment' ||
+                a.status === 'payment_done' ||
+                a.status === 'under_xen_review'
+            ).length;
+            const forwardedToWing = apps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
+            const teamSent = apps.filter((a: ConnectionApplication) => a.status === 'team_sent').length;
+            const completed = apps.filter((a: ConnectionApplication) => a.status === 'connection_completed').length;
+            const implemented = apps.filter((a: ConnectionApplication) => a.status === 'implemented').length;
             const rejected = apps.filter((a: ConnectionApplication) => a.status === 'rejected').length;
 
             setStats({
                 total,
-                newAssignments,
-                inProgress,
+                pendingXenApproval,
+                forwardedToWing,
+                teamSent,
                 completed,
+                implemented,
                 rejected,
             });
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching applications:', error);
-            const mockApps = getMockApplications();
-            setApplications(mockApps);
-            const total = mockApps.length;
-            const newAssignments = mockApps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
-            const inProgress = mockApps.filter((a: ConnectionApplication) => a.status === 'team_sent').length;
-            const completed = mockApps.filter((a: ConnectionApplication) => a.status === 'connection_completed' || a.status === 'implemented').length;
-            const rejected = mockApps.filter((a: ConnectionApplication) => a.status === 'rejected').length;
-
-            setStats({
-                total,
-                newAssignments,
-                inProgress,
-                completed,
-                rejected,
-            });
+            setError(error.message || 'Failed to load applications');
         } finally {
             setLoading(false);
         }
     };
 
-    const getMockApplications = (): ConnectionApplication[] => {
-        return [
-            {
-                applicationId: 'APP-2026-8835',
-                applicantName: 'Md. Kamal Hossain',
-                email: 'kamal@example.com',
-                mobile: '01712345678',
-                nidNo: '12345678901234567',
-                address: 'House #12, Road #5, Trimohoni, Kushtia',
-                connectionType: 'residential',
-                loadRequired: 5,
-                voltageLevel: '220',
-                purpose: 'New house construction',
-                feederName: 'Trimohoni',
-                transformerNo: 'TR-01',
-                poleNumber: 'P-123',
-                nearestLandmark: 'Near Trimohoni Bazar',
-                consumerId: 'user123',
-                status: 'forwarded_to_wing',
-                paymentStatus: 'paid',
-                feeAmount: 5000,
-                assignedMeterNo: null,
-                implementedAt: null,
-                xenRemarks: 'Approved. Send to connection wing.',
-                connectionWingRemarks: null,
-                createdAt: '2026-07-10T10:00:00Z',
-                updatedAt: '2026-07-10T10:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8836',
-                applicantName: 'Ms. Fatema Begum',
-                email: 'fatema@example.com',
-                mobile: '01712345679',
-                nidNo: '12345678901234568',
-                address: 'House #5, Circuit-Hose, Kushtia',
-                connectionType: 'commercial',
-                loadRequired: 15,
-                voltageLevel: '380',
-                purpose: 'New retail shop',
-                feederName: 'Circuit-Hose',
-                transformerNo: 'TR-03',
-                poleNumber: 'P-456',
-                nearestLandmark: 'Near Circuit-Hose School',
-                consumerId: 'user124',
-                status: 'team_sent',
-                paymentStatus: 'paid',
-                feeAmount: 10000,
-                assignedMeterNo: null,
-                implementedAt: null,
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: 'Team assigned for implementation.',
-                createdAt: '2026-07-09T14:30:00Z',
-                updatedAt: '2026-07-10T08:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8837',
-                applicantName: 'Md. Rahim Uddin',
-                email: 'rahim@example.com',
-                mobile: '01712345680',
-                nidNo: '12345678901234569',
-                address: 'Plot #10, DC-Court, Kushtia',
-                connectionType: 'industrial',
-                loadRequired: 30,
-                voltageLevel: '11000',
-                purpose: 'Small factory',
-                feederName: 'DC-Court',
-                transformerNo: 'TR-02',
-                poleNumber: 'P-789',
-                nearestLandmark: 'Opposite DC-Court',
-                consumerId: 'user125',
-                status: 'connection_completed',
-                paymentStatus: 'paid',
-                feeAmount: 15000,
-                assignedMeterNo: null,
-                implementedAt: null,
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: 'Installation completed.',
-                createdAt: '2026-07-08T09:15:00Z',
-                updatedAt: '2026-07-10T09:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8838',
-                applicantName: 'Ms. Nasrin Akter',
-                email: 'nasrin@example.com',
-                mobile: '01712345681',
-                nidNo: '12345678901234570',
-                address: 'House #20, N.S-Road, Kushtia',
-                connectionType: 'residential',
-                loadRequired: 3,
-                voltageLevel: '220',
-                purpose: 'New apartment',
-                feederName: 'N.S-Road',
-                transformerNo: 'TR-05',
-                poleNumber: 'P-321',
-                nearestLandmark: 'Near N.S-Road Market',
-                consumerId: 'user126',
-                status: 'implemented',
-                paymentStatus: 'paid',
-                feeAmount: 5000,
-                assignedMeterNo: 'MTR-2026-011',
-                implementedAt: '2026-07-10T08:00:00Z',
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: 'Connection completed successfully.',
-                createdAt: '2026-07-05T16:45:00Z',
-                updatedAt: '2026-07-10T08:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8839',
-                applicantName: 'Md. Shafiqul Islam',
-                email: 'shafiq@example.com',
-                mobile: '01712345682',
-                nidNo: '12345678901234571',
-                address: 'House #8, Trimohoni, Kushtia',
-                connectionType: 'commercial',
-                loadRequired: 10,
-                voltageLevel: '380',
-                purpose: 'Restaurant',
-                feederName: 'Trimohoni',
-                transformerNo: 'TR-01',
-                poleNumber: 'P-654',
-                nearestLandmark: 'Near Trimohoni Bridge',
-                consumerId: 'user127',
-                status: 'forwarded_to_wing',
-                paymentStatus: 'paid',
-                feeAmount: 10000,
-                assignedMeterNo: null,
-                implementedAt: null,
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: null,
-                createdAt: '2026-07-07T11:30:00Z',
-                updatedAt: '2026-07-08T09:00:00Z',
-            },
-        ];
-    };
-
     const getStatusBadge = (status: string) => {
         const statuses: Record<string, { color: string; label: string; icon: any }> = {
-            forwarded_to_wing: { color: 'bg-blue-100 text-blue-700', label: 'New Assignment', icon: Clock },
-            team_sent: { color: 'bg-purple-100 text-purple-700', label: 'Team Sent', icon: Send },
+            pending_payment: { color: 'bg-yellow-100 text-yellow-700', label: 'Pending Payment', icon: Clock },
+            payment_done: { color: 'bg-blue-100 text-blue-700', label: 'Payment Done', icon: CheckCircle },
+            under_xen_review: { color: 'bg-indigo-100 text-indigo-700', label: 'Under XEN Review', icon: ShieldAlert },
+            forwarded_to_wing: { color: 'bg-purple-100 text-purple-700', label: 'Forwarded to Wing', icon: Send },
+            team_sent: { color: 'bg-blue-100 text-blue-700', label: 'Team Sent', icon: Users },
             connection_completed: { color: 'bg-orange-100 text-orange-700', label: 'Connection Completed', icon: CheckCircle },
             implemented: { color: 'bg-green-100 text-green-700', label: 'Implemented', icon: CheckCircle },
             rejected: { color: 'bg-red-100 text-red-700', label: 'Rejected', icon: XCircle },
@@ -371,6 +207,7 @@ export default function ConnectionWingApplicationsPage() {
         setIsSubmitting(true);
         try {
             const token = localStorage.getItem('auth_token');
+
             const response = await fetch(
                 `${API_URL}/api/connection-wing/applications/${app.applicationId}/status`,
                 {
@@ -397,9 +234,10 @@ export default function ConnectionWingApplicationsPage() {
             setSelectedApp(null);
             setActionType(null);
             setActionRemarks('');
-        } catch (error) {
+
+        } catch (error: any) {
             console.error('Update status error:', error);
-            alert('Failed to update status. Please try again.');
+            alert(error.message || 'Failed to update status. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -412,7 +250,6 @@ export default function ConnectionWingApplicationsPage() {
         setShowActionModal(true);
     };
 
-    // ✅ Open Assign Meter Modal
     const openAssignMeterModal = (app: ConnectionApplication) => {
         setSelectedApp(app);
         setMeterForm({
@@ -424,11 +261,9 @@ export default function ConnectionWingApplicationsPage() {
         setShowAssignMeterModal(true);
     };
 
-    // ✅ Submit Assign Meter
     const submitAssignMeter = async () => {
         if (!selectedApp) return;
 
-        // Validate
         const errors: { [key: string]: string } = {};
         if (!meterForm.meterNo.trim()) {
             errors.meterNo = 'Meter number is required';
@@ -458,7 +293,7 @@ export default function ConnectionWingApplicationsPage() {
                     body: JSON.stringify({
                         meterNo: meterForm.meterNo,
                         initialReading: Number(meterForm.initialReading),
-                        connectionWingRemarks: meterForm.connectionWingRemarks || 'Meter assigned and connection completed',
+                        connectionWingRemarks: meterForm.connectionWingRemarks || 'Meter assigned successfully',
                     }),
                 }
             );
@@ -481,13 +316,26 @@ export default function ConnectionWingApplicationsPage() {
         }
     };
 
+    // Action button function with full flow
     const getActionButton = (app: ConnectionApplication) => {
+        // Check if application is waiting for XEN approval
+        const isWaitingForXen = ['pending_payment', 'payment_done', 'under_xen_review'].includes(app.status);
+
+        if (isWaitingForXen) {
+            return (
+                <div className="flex items-center space-x-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
+                    <Hourglass size={14} className="text-amber-600 animate-pulse" />
+                    <span className="text-xs text-amber-700 font-medium">Awaiting XEN's Approval</span>
+                </div>
+            );
+        }
+
         switch (app.status) {
             case 'forwarded_to_wing':
                 return (
                     <button
                         onClick={() => openActionModal(app, 'team_sent')}
-                        className="px-3 py-1 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-1"
+                        className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-1 shadow-sm"
                     >
                         <Send size={14} />
                         <span>Send Team</span>
@@ -497,7 +345,7 @@ export default function ConnectionWingApplicationsPage() {
                 return (
                     <button
                         onClick={() => openActionModal(app, 'connection_completed')}
-                        className="px-3 py-1 bg-orange-600 text-white text-xs rounded-lg hover:bg-orange-700 transition-colors flex items-center space-x-1"
+                        className="px-3 py-1.5 bg-orange-600 text-white text-xs rounded-lg hover:bg-orange-700 transition-colors flex items-center space-x-1 shadow-sm"
                     >
                         <CheckCircle size={14} />
                         <span>Complete</span>
@@ -507,7 +355,7 @@ export default function ConnectionWingApplicationsPage() {
                 return (
                     <button
                         onClick={() => openAssignMeterModal(app)}
-                        className="px-3 py-1 bg-emerald-600 text-white text-xs rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-1"
+                        className="px-3 py-1.5 bg-emerald-600 text-white text-xs rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-1 shadow-sm"
                     >
                         <Plus size={14} />
                         <span>Assign Meter</span>
@@ -515,14 +363,24 @@ export default function ConnectionWingApplicationsPage() {
                 );
             case 'implemented':
                 return (
-                    <span className="text-xs text-green-600 font-medium">✅ Implemented</span>
+                    <span className="text-xs text-green-600 font-medium flex items-center space-x-1 bg-green-50 px-2 py-1 rounded-full">
+                        <CheckCircle size={14} />
+                        <span>Implemented</span>
+                    </span>
                 );
             case 'rejected':
                 return (
-                    <span className="text-xs text-red-600 font-medium">❌ Rejected</span>
+                    <span className="text-xs text-red-600 font-medium flex items-center space-x-1 bg-red-50 px-2 py-1 rounded-full">
+                        <XCircle size={14} />
+                        <span>Rejected</span>
+                    </span>
                 );
             default:
-                return null;
+                return (
+                    <span className="text-xs text-gray-500 font-medium">
+                        No Action
+                    </span>
+                );
         }
     };
 
@@ -540,7 +398,7 @@ export default function ConnectionWingApplicationsPage() {
     const getActionColor = () => {
         switch (actionType) {
             case 'team_sent':
-                return 'bg-purple-600 hover:bg-purple-700';
+                return 'bg-blue-600 hover:bg-blue-700';
             case 'connection_completed':
                 return 'bg-orange-600 hover:bg-orange-700';
             default:
@@ -564,17 +422,25 @@ export default function ConnectionWingApplicationsPage() {
         currentPage * ITEMS_PER_PAGE
     );
 
-    const statCards = [
-        { title: 'Total Applications', value: stats.total, icon: FileText, bgColor: 'bg-blue-100', change: '', trend: 'neutral' as const },
-        { title: 'New Assignments', value: stats.newAssignments, icon: Clock, bgColor: 'bg-blue-100', change: `${stats.newAssignments} pending`, trend: 'down' as const },
-        { title: 'In Progress', value: stats.inProgress, icon: Activity, bgColor: 'bg-yellow-100', change: `${stats.inProgress} ongoing`, trend: 'neutral' as const },
-        { title: 'Completed', value: stats.completed, icon: CheckCircle, bgColor: 'bg-green-100', change: `${stats.completed} done`, trend: 'up' as const },
-    ];
-
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
                 <Loader2 size={40} className="animate-spin text-emerald-600" />
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+                <AlertTriangle size={40} className="text-red-500 mx-auto mb-2" />
+                <p className="text-red-600">{error}</p>
+                <button
+                    onClick={fetchApplications}
+                    className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                    Try Again
+                </button>
             </div>
         );
     }
@@ -601,24 +467,85 @@ export default function ConnectionWingApplicationsPage() {
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {statCards.map((stat, index) => {
-                    const Icon = stat.icon;
-                    return (
-                        <div key={index} className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-500">{stat.title}</p>
-                                    <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
-                                </div>
-                                <div className={`p-3 rounded-xl ${stat.bgColor}`}>
-                                    <Icon size={20} />
-                                </div>
-                            </div>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500">Total</p>
+                            <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
                         </div>
-                    );
-                })}
+                        <div className="p-3 rounded-xl bg-blue-100">
+                            <FileText size={20} className="text-blue-600" />
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500">Awaiting XEN</p>
+                            <p className="text-2xl font-bold text-amber-600">{stats.pendingXenApproval}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-amber-100">
+                            <Hourglass size={20} className="text-amber-600" />
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500">Forwarded</p>
+                            <p className="text-2xl font-bold text-purple-600">{stats.forwardedToWing}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-purple-100">
+                            <Send size={20} className="text-purple-600" />
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500">Team Sent</p>
+                            <p className="text-2xl font-bold text-blue-600">{stats.teamSent}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-blue-100">
+                            <Users size={20} className="text-blue-600" />
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500">Completed</p>
+                            <p className="text-2xl font-bold text-orange-600">{stats.completed}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-orange-100">
+                            <CheckCircle size={20} className="text-orange-600" />
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500">Implemented</p>
+                            <p className="text-2xl font-bold text-green-600">{stats.implemented}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-green-100">
+                            <CheckCircle size={20} className="text-green-600" />
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500">Rejected</p>
+                            <p className="text-2xl font-bold text-red-600">{stats.rejected}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-red-100">
+                            <XCircle size={20} className="text-red-600" />
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Search and Filters */}
@@ -641,7 +568,10 @@ export default function ConnectionWingApplicationsPage() {
                             className="px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                         >
                             <option value="all">All Status</option>
-                            <option value="forwarded_to_wing">New Assignment</option>
+                            <option value="pending_payment">Pending Payment</option>
+                            <option value="payment_done">Payment Done</option>
+                            <option value="under_xen_review">Under XEN Review</option>
+                            <option value="forwarded_to_wing">Forwarded to Wing</option>
                             <option value="team_sent">Team Sent</option>
                             <option value="connection_completed">Connection Completed</option>
                             <option value="implemented">Implemented</option>
@@ -824,7 +754,7 @@ export default function ConnectionWingApplicationsPage() {
                 </div>
             )}
 
-            {/* Action Modal (Send Team / Complete) */}
+            {/* Action Modal - Send Team / Complete */}
             {showActionModal && selectedApp && actionType && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
@@ -839,6 +769,7 @@ export default function ConnectionWingApplicationsPage() {
                             <p className="text-sm text-gray-600"><span className="font-medium">Application:</span> {selectedApp.applicationId}</p>
                             <p className="text-sm text-gray-600"><span className="font-medium">Applicant:</span> {selectedApp.applicantName}</p>
                             <p className="text-sm text-gray-600"><span className="font-medium">Type:</span> {getConnectionTypeLabel(selectedApp.connectionType)}</p>
+                            <p className="text-sm text-gray-600"><span className="font-medium">Current Status:</span> <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusBadge(selectedApp.status).color}`}>{getStatusBadge(selectedApp.status).label}</span></p>
                         </div>
 
                         <div>
@@ -884,7 +815,7 @@ export default function ConnectionWingApplicationsPage() {
                 </div>
             )}
 
-            {/* ✅ Assign Meter Modal */}
+            {/* Assign Meter Modal */}
             {showAssignMeterModal && selectedApp && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
@@ -915,6 +846,9 @@ export default function ConnectionWingApplicationsPage() {
                             </p>
                             <p className="text-sm text-gray-600">
                                 <span className="font-medium">Load:</span> {selectedApp.loadRequired} kW
+                            </p>
+                            <p className="text-sm text-gray-600">
+                                <span className="font-medium">Current Status:</span> <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700">Connection Completed</span>
                             </p>
                         </div>
 
