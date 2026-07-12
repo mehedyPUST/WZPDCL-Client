@@ -1,4 +1,3 @@
-// app/dashboard/billing_wings/all-bills/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -40,6 +39,9 @@ interface Bill {
     billId: string;
     meterNo: string;
     consumerName: string;
+    consumerEmail?: string;
+    consumerMobile?: string;
+    consumerAddress?: string;
     billingMonth: string;
     consumerType: 'residential' | 'commercial' | 'industrial';
     previousReading: number;
@@ -53,6 +55,9 @@ interface Bill {
     paymentMethod?: string;
     lateFee?: number;
     vatAmount?: number;
+    grandTotal?: number;
+    isRegisteredUser?: boolean;
+    isClaimed?: boolean;
     createdAt: string;
     updatedAt: string;
 }
@@ -90,9 +95,67 @@ const StatCard = ({ title, value, icon, bgColor, change, trend }: StatCardProps)
     </div>
 );
 
+// ✅ FIXED: formatCurrency - handles all cases (string, number, extra zero)
+const formatCurrency = (amount: any) => {
+    // Handle null, undefined, or empty
+    if (amount === null || amount === undefined || amount === '') {
+        return '৳0';
+    }
+
+    let num: number;
+
+    // ✅ If string, clean and parse
+    if (typeof amount === 'string') {
+        // Remove commas, spaces, and parse
+        let cleanStr = amount.replace(/,/g, '').replace(/\s/g, '').trim();
+
+        // ✅ Try to parse
+        num = parseFloat(cleanStr);
+
+        // ✅ If parseFloat gives NaN, try removing trailing zeros one by one
+        if (isNaN(num) && cleanStr.length > 0) {
+            let temp = cleanStr;
+            // Remove trailing zeros until we get a valid number
+            while (temp.length > 0 && isNaN(parseFloat(temp))) {
+                temp = temp.slice(0, -1);
+            }
+            num = parseFloat(temp);
+        }
+
+        // ✅ If still NaN, try a different approach - check if it ends with 0
+        if (isNaN(num) && cleanStr.length > 1) {
+            // Try removing last character
+            const tryStr = cleanStr.slice(0, -1);
+            num = parseFloat(tryStr);
+        }
+    } else {
+        num = Number(amount);
+    }
+
+    // ✅ Final validation
+    if (isNaN(num) || num === 0) {
+        return '৳0';
+    }
+
+    // ✅ Format with Indian numbering system
+    // Using toFixed(2) to handle decimal properly, then remove .00 if present
+    let formatted = num.toFixed(2);
+    // Remove .00 if it's a whole number
+    if (formatted.endsWith('.00')) {
+        formatted = formatted.slice(0, -3);
+    }
+    // Add commas
+    const parts = formatted.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    formatted = parts.join('.');
+
+    return `৳${formatted}`;
+};
+
 export default function BillingWingsAllBillsPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [bills, setBills] = useState<Bill[]>([]);
     const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
     const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -110,6 +173,8 @@ export default function BillingWingsAllBillsPage() {
         unpaidCount: 0,
         pendingCount: 0,
         collectionRate: 0,
+        registeredCount: 0,
+        unregisteredCount: 0,
     });
     const [user, setUser] = useState<any>(null);
     const [selectedBills, setSelectedBills] = useState<string[]>([]);
@@ -142,7 +207,8 @@ export default function BillingWingsAllBillsPage() {
         try {
             const token = localStorage.getItem('auth_token');
 
-            // Fetch all bills (pagination can be added later if needed, currently fetching all for stats)
+            console.log('📡 Fetching all bills from API...');
+
             const response = await fetch(
                 `${API_URL}/api/billing/bills/all?limit=1000`,
                 {
@@ -154,24 +220,59 @@ export default function BillingWingsAllBillsPage() {
             );
 
             if (!response.ok) {
-                throw new Error('Failed to fetch bills');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch bills');
             }
 
             const result = await response.json();
+            console.log('📦 API Response:', result);
 
             if (result.success && result.data) {
-                setBills(result.data);
-                updateStats(result.data);
+                const billsData = result.data;
+                console.log(`📦 Found ${billsData.length} bills`);
+
+                if (billsData.length === 0) {
+                    setBills([]);
+                    setStats({
+                        totalBills: 0,
+                        totalAmount: 0,
+                        paidAmount: 0,
+                        unpaidAmount: 0,
+                        paidCount: 0,
+                        unpaidCount: 0,
+                        pendingCount: 0,
+                        collectionRate: 0,
+                        registeredCount: 0,
+                        unregisteredCount: 0,
+                    });
+                    setError('No bills found in the system.');
+                    setLoading(false);
+                    return;
+                }
+
+                setBills(billsData);
+                updateStats(billsData);
+                setError(null);
             } else {
-                setBills([]);
-                updateStats([]);
+                throw new Error(result.message || 'No bill data received');
             }
 
-        } catch (error) {
-            console.error('Error fetching bills:', error);
-            setError('Failed to load bills. Please try again.');
+        } catch (error: any) {
+            console.error('❌ Error fetching bills:', error);
+            setError(error.message || 'Failed to load bills');
             setBills([]);
-            updateStats([]);
+            setStats({
+                totalBills: 0,
+                totalAmount: 0,
+                paidAmount: 0,
+                unpaidAmount: 0,
+                paidCount: 0,
+                unpaidCount: 0,
+                pendingCount: 0,
+                collectionRate: 0,
+                registeredCount: 0,
+                unregisteredCount: 0,
+            });
         } finally {
             setLoading(false);
         }
@@ -186,6 +287,8 @@ export default function BillingWingsAllBillsPage() {
         const unpaidCount = billsData.filter(b => b.status === 'unpaid').length;
         const pendingCount = billsData.filter(b => b.status === 'pending').length;
         const collectionRate = totalAmount > 0 ? (paidAmount / totalAmount) * 100 : 0;
+        const registeredCount = billsData.filter(b => b.isRegisteredUser).length;
+        const unregisteredCount = billsData.filter(b => b.isRegisteredUser === false && b.consumerName !== 'N/A').length;
 
         setStats({
             totalBills: total,
@@ -196,6 +299,8 @@ export default function BillingWingsAllBillsPage() {
             unpaidCount,
             pendingCount,
             collectionRate,
+            registeredCount,
+            unregisteredCount,
         });
     };
 
@@ -266,10 +371,38 @@ export default function BillingWingsAllBillsPage() {
     const months = getUniqueMonths();
 
     const statCards = [
-        { title: 'Total Bills', value: stats.totalBills, icon: FileText, bgColor: 'bg-blue-100', change: '', trend: 'neutral' as const },
-        { title: 'Total Amount', value: `৳${stats.totalAmount.toLocaleString()}`, icon: DollarSign, bgColor: 'bg-emerald-100', change: '', trend: 'neutral' as const },
-        { title: 'Collection Rate', value: `${stats.collectionRate.toFixed(1)}%`, icon: TrendingUp, bgColor: 'bg-green-100', change: `${stats.paidCount} paid`, trend: 'up' as const },
-        { title: 'Unpaid', value: stats.unpaidCount, icon: AlertCircle, bgColor: 'bg-red-100', change: `৳${stats.unpaidAmount.toLocaleString()}`, trend: 'down' as const },
+        {
+            title: 'Total Bills',
+            value: stats.totalBills,
+            icon: FileText,
+            bgColor: 'bg-blue-100',
+            change: `${stats.registeredCount} registered, ${stats.unregisteredCount} unregistered`,
+            trend: 'neutral' as const
+        },
+        {
+            title: 'Total Amount',
+            value: formatCurrency(stats.totalAmount),
+            icon: DollarSign,
+            bgColor: 'bg-emerald-100',
+            change: '',
+            trend: 'neutral' as const
+        },
+        {
+            title: 'Collection Rate',
+            value: `${stats.collectionRate.toFixed(1)}%`,
+            icon: TrendingUp,
+            bgColor: 'bg-green-100',
+            change: `${stats.paidCount} paid`,
+            trend: 'up' as const
+        },
+        {
+            title: 'Unpaid',
+            value: stats.unpaidCount,
+            icon: AlertCircle,
+            bgColor: 'bg-red-100',
+            change: formatCurrency(stats.unpaidAmount),
+            trend: 'down' as const
+        },
     ];
 
     if (loading) {
@@ -280,14 +413,15 @@ export default function BillingWingsAllBillsPage() {
         );
     }
 
-    if (error) {
+    if (error && bills.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center h-64 space-y-4">
-                <AlertCircle size={48} className="text-red-500" />
-                <p className="text-red-600 font-medium">{error}</p>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
+                <AlertCircle size={48} className="text-red-500 mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-red-700">Failed to Load Bills</h3>
+                <p className="text-red-600 mt-2">{error}</p>
                 <button
                     onClick={fetchBills}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                    className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                 >
                     Try Again
                 </button>
@@ -304,20 +438,33 @@ export default function BillingWingsAllBillsPage() {
                         <FileText size={24} className="text-emerald-600" />
                         <span>All Bills</span>
                     </h1>
-                    <p className="text-gray-500 text-sm">View and manage all consumer bills</p>
+                    <p className="text-gray-500 text-sm">
+                        {bills.length} bills found
+                        {stats.registeredCount > 0 && (
+                            <span className="ml-2 text-xs text-emerald-600">
+                                ({stats.registeredCount} registered users)
+                            </span>
+                        )}
+                    </p>
                 </div>
                 <div className="flex items-center space-x-3">
                     <button
-                        onClick={fetchBills}
-                        className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                        onClick={() => {
+                            setIsRefreshing(true);
+                            fetchBills().finally(() => setIsRefreshing(false));
+                        }}
+                        disabled={isRefreshing}
+                        className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 disabled:opacity-50"
                     >
-                        <RefreshCw size={16} />
-                        <span>Refresh</span>
+                        <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+                        <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                     </button>
-                    <button className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2">
-                        <Download size={16} />
-                        <span>Export</span>
-                    </button>
+                    {bills.length > 0 && (
+                        <button className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2">
+                            <Download size={16} />
+                            <span>Export</span>
+                        </button>
+                    )}
                     <button
                         onClick={() => router.push('/dashboard/billing_wings')}
                         className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-2"
@@ -338,6 +485,9 @@ export default function BillingWingsAllBillsPage() {
                                 <div>
                                     <p className="text-sm text-gray-500">{stat.title}</p>
                                     <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
+                                    {stat.change && (
+                                        <p className="text-xs text-gray-400 mt-1">{stat.change}</p>
+                                    )}
                                 </div>
                                 <div className={`p-3 rounded-xl ${stat.bgColor}`}>
                                     <Icon size={20} />
@@ -357,14 +507,20 @@ export default function BillingWingsAllBillsPage() {
                             type="text"
                             placeholder="Search by bill ID, consumer name, or meter number..."
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                     </div>
                     <div className="flex flex-wrap gap-3">
                         <select
                             value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
+                            onChange={(e) => {
+                                setFilterStatus(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             className="px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                         >
                             <option value="all">All Status</option>
@@ -374,7 +530,10 @@ export default function BillingWingsAllBillsPage() {
                         </select>
                         <select
                             value={filterType}
-                            onChange={(e) => setFilterType(e.target.value)}
+                            onChange={(e) => {
+                                setFilterType(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             className="px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                         >
                             <option value="all">All Types</option>
@@ -384,7 +543,10 @@ export default function BillingWingsAllBillsPage() {
                         </select>
                         <select
                             value={filterMonth}
-                            onChange={(e) => setFilterMonth(e.target.value)}
+                            onChange={(e) => {
+                                setFilterMonth(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             className="px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                         >
                             <option value="all">All Months</option>
@@ -398,6 +560,7 @@ export default function BillingWingsAllBillsPage() {
                                 setFilterStatus('all');
                                 setFilterType('all');
                                 setFilterMonth('all');
+                                setCurrentPage(1);
                             }}
                             className="px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
                         >
@@ -405,6 +568,9 @@ export default function BillingWingsAllBillsPage() {
                             <span>Reset</span>
                         </button>
                     </div>
+                </div>
+                <div className="mt-2 text-xs text-gray-400">
+                    Found {filteredBills.length} bills
                 </div>
             </div>
 
@@ -453,7 +619,9 @@ export default function BillingWingsAllBillsPage() {
                             {paginatedBills.length === 0 ? (
                                 <tr>
                                     <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
-                                        No bills found matching your criteria.
+                                        {searchTerm || filterStatus !== 'all' || filterType !== 'all' || filterMonth !== 'all'
+                                            ? 'No bills match your filters.'
+                                            : 'No bills found in the system. Generate bills to get started.'}
                                     </td>
                                 </tr>
                             ) : (
@@ -476,6 +644,15 @@ export default function BillingWingsAllBillsPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <p className="text-sm text-gray-800">{bill.consumerName}</p>
+                                                {bill.isRegisteredUser && (
+                                                    <span className="text-xs text-emerald-600">✅ Registered</span>
+                                                )}
+                                                {bill.isRegisteredUser === false && bill.consumerName !== 'N/A' && (
+                                                    <span className="text-xs text-yellow-600">⚠️ Unregistered</span>
+                                                )}
+                                                {bill.consumerName === 'N/A' && (
+                                                    <span className="text-xs text-gray-400">⚪ Unclaimed</span>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className="text-sm text-gray-600">{bill.meterNo}</span>
@@ -491,8 +668,11 @@ export default function BillingWingsAllBillsPage() {
                                             <td className="px-6 py-4">
                                                 <span className={`text-sm font-medium ${bill.status === 'unpaid' ? 'text-red-600' : 'text-gray-800'
                                                     }`}>
-                                                    ৳{bill.totalAmount.toLocaleString()}
+                                                    {formatCurrency(bill.grandTotal || bill.totalAmount)}
                                                 </span>
+                                                {bill.lateFee && bill.lateFee > 0 && (
+                                                    <span className="text-xs text-red-500 block">+{formatCurrency(bill.lateFee)} late fee</span>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center space-x-1 w-fit ${StatusBadge.color}`}>
@@ -534,18 +714,41 @@ export default function BillingWingsAllBillsPage() {
                             >
                                 <ChevronLeft size={16} />
                             </button>
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                                let pageNum;
+                                if (totalPages <= 5) {
+                                    pageNum = i + 1;
+                                } else if (currentPage <= 3) {
+                                    pageNum = i + 1;
+                                } else if (currentPage >= totalPages - 2) {
+                                    pageNum = totalPages - 4 + i;
+                                } else {
+                                    pageNum = currentPage - 2 + i;
+                                }
+                                return (
+                                    <button
+                                        key={pageNum}
+                                        onClick={() => setCurrentPage(pageNum)}
+                                        className={`px-3 py-1 rounded-lg text-sm transition-colors ${currentPage === pageNum
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'border border-gray-200 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        {pageNum}
+                                    </button>
+                                );
+                            })}
+                            {totalPages > 5 && currentPage < totalPages - 2 && (
+                                <span className="text-gray-400">...</span>
+                            )}
+                            {totalPages > 5 && currentPage < totalPages - 2 && (
                                 <button
-                                    key={page}
-                                    onClick={() => setCurrentPage(page)}
-                                    className={`px-3 py-1 rounded-lg text-sm transition-colors ${currentPage === page
-                                        ? 'bg-emerald-600 text-white'
-                                        : 'border border-gray-200 hover:bg-gray-50'
-                                        }`}
+                                    onClick={() => setCurrentPage(totalPages)}
+                                    className={`px-3 py-1 rounded-lg text-sm transition-colors border border-gray-200 hover:bg-gray-50`}
                                 >
-                                    {page}
+                                    {totalPages}
                                 </button>
-                            ))}
+                            )}
                             <button
                                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                 disabled={currentPage === totalPages}
@@ -591,6 +794,15 @@ export default function BillingWingsAllBillsPage() {
                             <div>
                                 <p className="text-xs text-gray-500">Consumer</p>
                                 <p className="text-sm font-medium">{selectedBill.consumerName}</p>
+                                {selectedBill.isRegisteredUser && (
+                                    <span className="text-xs text-emerald-600 block">✅ Registered User</span>
+                                )}
+                                {selectedBill.isRegisteredUser === false && selectedBill.consumerName !== 'N/A' && (
+                                    <span className="text-xs text-yellow-600 block">⚠️ Unregistered User</span>
+                                )}
+                                {selectedBill.consumerName === 'N/A' && (
+                                    <span className="text-xs text-gray-400 block">⚪ Unclaimed Meter</span>
+                                )}
                             </div>
                             <div>
                                 <p className="text-xs text-gray-500">Meter Number</p>
@@ -639,14 +851,40 @@ export default function BillingWingsAllBillsPage() {
                             {selectedBill.lateFee && selectedBill.lateFee > 0 && (
                                 <div>
                                     <p className="text-xs text-gray-500">Late Fee</p>
-                                    <p className="text-sm font-medium text-red-600">৳{selectedBill.lateFee.toFixed(2)}</p>
+                                    <p className="text-sm font-medium text-red-600">{formatCurrency(selectedBill.lateFee)}</p>
                                 </div>
                             )}
-                            <div className="col-span-2">
+                            {selectedBill.consumerEmail && selectedBill.consumerEmail !== 'N/A' && (
+                                <div>
+                                    <p className="text-xs text-gray-500">Email</p>
+                                    <p className="text-sm font-medium">{selectedBill.consumerEmail}</p>
+                                </div>
+                            )}
+                            {selectedBill.consumerMobile && selectedBill.consumerMobile !== 'N/A' && (
+                                <div>
+                                    <p className="text-xs text-gray-500">Mobile</p>
+                                    <p className="text-sm font-medium">{selectedBill.consumerMobile}</p>
+                                </div>
+                            )}
+                            {selectedBill.consumerAddress && selectedBill.consumerAddress !== 'N/A' && (
+                                <div className="col-span-2">
+                                    <p className="text-xs text-gray-500">Address</p>
+                                    <p className="text-sm font-medium">{selectedBill.consumerAddress}</p>
+                                </div>
+                            )}
+                            <div className="col-span-2 border-t border-gray-100 pt-4">
                                 <p className="text-xs text-gray-500">Total Amount</p>
                                 <p className={`text-2xl font-bold ${selectedBill.status === 'unpaid' ? 'text-red-600' : 'text-gray-800'}`}>
-                                    ৳{selectedBill.totalAmount.toLocaleString()}
+                                    {formatCurrency(selectedBill.grandTotal || selectedBill.totalAmount)}
                                 </p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Created</p>
+                                <p className="text-sm text-gray-600">{new Date(selectedBill.createdAt).toLocaleString()}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Last Updated</p>
+                                <p className="text-sm text-gray-600">{new Date(selectedBill.updatedAt).toLocaleString()}</p>
                             </div>
                         </div>
 

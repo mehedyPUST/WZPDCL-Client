@@ -1,4 +1,3 @@
-// app/dashboard/connection_wing/add-consumer/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -23,6 +22,9 @@ import {
     Shield,
     ClipboardCheck,
     Info,
+    Link2,
+    UserPlus,
+    Clock,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -61,6 +63,14 @@ interface FieldCheckResult {
     field: string;
 }
 
+interface ResponseData {
+    userId?: string;
+    isNewUser?: boolean;
+    isExistingConsumer?: boolean;
+    nextSteps?: string[];
+    _id?: string;
+}
+
 const FEEDER_OPTIONS = ['Trimohoni', 'Circuit-Hose', 'DC-Court', 'N.S-Road'];
 
 export default function ConnectionWingAddConsumerPage() {
@@ -69,6 +79,7 @@ export default function ConnectionWingAddConsumerPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
     const [consumerId, setConsumerId] = useState('');
+    const [responseData, setResponseData] = useState<ResponseData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [user, setUser] = useState<any>(null);
 
@@ -381,9 +392,18 @@ export default function ConnectionWingAddConsumerPage() {
                 throw new Error(data.message || 'Failed to add consumer');
             }
 
-            setConsumerId(data.data.id || data.data._id);
+            // ✅ Store response data
+            setConsumerId(data.data?._id || data.data?.id || '');
+            setResponseData({
+                userId: data.data?.userId,
+                isNewUser: data.data?.isNewUser,
+                isExistingConsumer: data.data?.isExistingConsumer,
+                nextSteps: data.data?.nextSteps,
+                _id: data.data?._id,
+            });
             setSubmitSuccess(true);
 
+            // ✅ Reset form
             setFormData({
                 name: '',
                 email: '',
@@ -407,6 +427,9 @@ export default function ConnectionWingAddConsumerPage() {
         }
     };
 
+    // ============================================
+    // SUCCESS PAGE
+    // ============================================
     if (submitSuccess) {
         return (
             <div className="flex items-center justify-center min-h-[60vh]">
@@ -414,23 +437,58 @@ export default function ConnectionWingAddConsumerPage() {
                     <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <CheckCircle size={40} className="text-emerald-600" />
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Consumer Added Successfully! 🎉</h2>
+
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                        {responseData?.isNewUser === false ? 'Consumer Linked Successfully! 🔗' : 'Consumer Added Successfully! 🎉'}
+                    </h2>
+
                     <p className="text-gray-500 mb-4">
-                        Consumer has been added to the system. They can claim this meter after registration.
+                        {responseData?.isNewUser === false
+                            ? 'Consumer has been linked to their existing account successfully.'
+                            : responseData?.isExistingConsumer
+                                ? 'Consumer already existed and has been updated with the new information.'
+                                : 'Consumer has been added to the system. They can claim this meter after registration.'
+                        }
                     </p>
+
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
                         <p className="text-sm text-gray-600">Consumer ID</p>
-                        <p className="text-xl font-bold text-emerald-700">{consumerId}</p>
+                        <p className="text-xl font-bold text-emerald-700">{consumerId || 'N/A'}</p>
                     </div>
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
-                        <p className="text-sm text-blue-700">📌 Next Steps:</p>
-                        <ul className="text-sm text-blue-600 list-disc list-inside mt-2 space-y-1">
-                            <li>Consumer needs to register on the website</li>
-                            <li>After registration, go to Dashboard → My Connections</li>
-                            <li>Click on "Claim Meter" and search for their meter</li>
-                            <li>Consumer data will be merged with their profile</li>
-                        </ul>
-                    </div>
+
+                    {responseData?.userId && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                            <p className="text-sm text-gray-600">Linked User ID</p>
+                            <p className="text-sm font-medium text-blue-700">{responseData.userId}</p>
+                        </div>
+                    )}
+
+                    {responseData?.isNewUser !== false && responseData?.nextSteps && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
+                            <p className="text-sm text-blue-700 font-medium flex items-center space-x-2">
+                                <ClipboardCheck size={16} />
+                                <span>📌 Next Steps:</span>
+                            </p>
+                            <ul className="text-sm text-blue-600 list-disc list-inside mt-2 space-y-1">
+                                {responseData.nextSteps.map((step, index) => (
+                                    <li key={index}>{step}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {responseData?.isNewUser === false && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 text-left">
+                            <p className="text-sm text-green-700 font-medium flex items-center space-x-2">
+                                <Link2 size={16} />
+                                <span>✅ Already Registered:</span>
+                            </p>
+                            <p className="text-sm text-green-600 mt-1">
+                                This consumer already has an account. They can now access their dashboard to view bills and manage connections.
+                            </p>
+                        </div>
+                    )}
+
                     <div className="flex flex-col sm:flex-row gap-3 justify-center">
                         <button
                             onClick={() => {
@@ -444,6 +502,32 @@ export default function ConnectionWingAddConsumerPage() {
                         <button
                             onClick={() => {
                                 setSubmitSuccess(false);
+                                router.push('/dashboard/connection_wing/add-meter');
+                            }}
+                            className="px-6 py-2.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                        >
+                            <Package size={16} />
+                            <span>Add Meter</span>
+                        </button>
+                        <button
+                            onClick={() => {
+                                setSubmitSuccess(false);
+                                setConsumerId('');
+                                setResponseData(null);
+                                setFormData({
+                                    name: '',
+                                    email: '',
+                                    mobile: '',
+                                    nidNo: '',
+                                    address: '',
+                                    consumerType: 'residential',
+                                    feederName: '',
+                                    meterNo: '',
+                                    isActive: true,
+                                });
+                                setMeterValidation(null);
+                                setFieldValid({});
+                                setFieldCheckResult({});
                             }}
                             className="px-6 py-2.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
                         >
@@ -455,6 +539,9 @@ export default function ConnectionWingAddConsumerPage() {
         );
     }
 
+    // ============================================
+    // MAIN FORM
+    // ============================================
     return (
         <div className="space-y-6">
             {/* Page Header */}
@@ -510,6 +597,10 @@ export default function ConnectionWingAddConsumerPage() {
                                 <ClipboardCheck size={14} />
                                 <span>Meter must be available (not assigned to anyone)</span>
                             </li>
+                            <li className="flex items-center space-x-2">
+                                <ClipboardCheck size={14} />
+                                <span>If user already exists, consumer will be linked automatically</span>
+                            </li>
                         </ul>
                     </div>
                     <div className="bg-emerald-500/30 p-4 rounded-2xl hidden sm:block">
@@ -553,9 +644,9 @@ export default function ConnectionWingAddConsumerPage() {
                                 value={formData.email}
                                 onChange={handleChange}
                                 className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${errors.email ? 'border-red-500 bg-red-50' :
-                                        fieldValid.email === true ? 'border-green-500 bg-green-50' :
-                                            fieldValid.email === false ? 'border-red-500 bg-red-50' :
-                                                'border-gray-200'
+                                    fieldValid.email === true ? 'border-green-500 bg-green-50' :
+                                        fieldValid.email === false ? 'border-red-500 bg-red-50' :
+                                            'border-gray-200'
                                     }`}
                                 placeholder="john@example.com"
                             />
@@ -596,9 +687,9 @@ export default function ConnectionWingAddConsumerPage() {
                                 value={formData.mobile}
                                 onChange={handleChange}
                                 className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${errors.mobile ? 'border-red-500 bg-red-50' :
-                                        fieldValid.mobile === true ? 'border-green-500 bg-green-50' :
-                                            fieldValid.mobile === false ? 'border-red-500 bg-red-50' :
-                                                'border-gray-200'
+                                    fieldValid.mobile === true ? 'border-green-500 bg-green-50' :
+                                        fieldValid.mobile === false ? 'border-red-500 bg-red-50' :
+                                            'border-gray-200'
                                     }`}
                                 placeholder="017XX-XXXXXX"
                             />
@@ -639,9 +730,9 @@ export default function ConnectionWingAddConsumerPage() {
                                 value={formData.nidNo}
                                 onChange={handleChange}
                                 className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${errors.nidNo ? 'border-red-500 bg-red-50' :
-                                        fieldValid.nidNo === true ? 'border-green-500 bg-green-50' :
-                                            fieldValid.nidNo === false ? 'border-red-500 bg-red-50' :
-                                                'border-gray-200'
+                                    fieldValid.nidNo === true ? 'border-green-500 bg-green-50' :
+                                        fieldValid.nidNo === false ? 'border-red-500 bg-red-50' :
+                                            'border-gray-200'
                                     }`}
                                 placeholder="12345678901234567"
                             />
@@ -891,13 +982,13 @@ export default function ConnectionWingAddConsumerPage() {
                                 Object.values(fieldValid).some(v => v === null && formData.email && formData.mobile && formData.nidNo)
                             }
                             className={`px-8 py-3 bg-emerald-600 text-white rounded-xl font-medium flex items-center space-x-2 transition-all shadow-sm hover:shadow-md ${isSubmitting ||
-                                    meterChecking ||
-                                    !meterValidation?.exists ||
-                                    meterValidation?.isAssigned ||
-                                    Object.values(fieldValid).some(v => v === false) ||
-                                    Object.values(fieldValid).some(v => v === null && formData.email && formData.mobile && formData.nidNo)
-                                    ? 'opacity-50 cursor-not-allowed'
-                                    : 'hover:bg-emerald-700'
+                                meterChecking ||
+                                !meterValidation?.exists ||
+                                meterValidation?.isAssigned ||
+                                Object.values(fieldValid).some(v => v === false) ||
+                                Object.values(fieldValid).some(v => v === null && formData.email && formData.mobile && formData.nidNo)
+                                ? 'opacity-50 cursor-not-allowed'
+                                : 'hover:bg-emerald-700'
                                 }`}
                         >
                             {isSubmitting ? (

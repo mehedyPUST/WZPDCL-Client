@@ -1,4 +1,3 @@
-// app/dashboard/billing_wings/all-consumers/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -66,6 +65,8 @@ interface Consumer {
     claimedBy?: string;
     registeredBy?: string;
     status?: string;
+    hasMeter?: boolean;
+    userId?: string;
 }
 
 interface StatusBadge {
@@ -97,6 +98,8 @@ export default function BillingWingsAllConsumersPage() {
         unclaimed: 0,
         registered: 0,
         pending: 0,
+        hasMeter: 0,
+        noMeter: 0,
     });
     const [user, setUser] = useState<any>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -128,7 +131,7 @@ export default function BillingWingsAllConsumersPage() {
         try {
             const token = localStorage.getItem('auth_token');
 
-            // ✅ Fetch from consumers collection
+            // ✅ Fetch consumers from API
             const response = await fetch(
                 `${API_URL}/api/billing/consumers/all`,
                 {
@@ -162,76 +165,85 @@ export default function BillingWingsAllConsumersPage() {
                         unclaimed: 0,
                         registered: 0,
                         pending: 0,
+                        hasMeter: 0,
+                        noMeter: 0,
                     });
                     setError('No consumers found in the system.');
                     setLoading(false);
                     return;
                 }
 
-                // ✅ Process consumers from consumers collection
-                const processedConsumers = consumersData.map((consumer: any) => ({
-                    ...consumer,
-                    id: consumer._id || consumer.id,
-                    _id: consumer._id || consumer.id,
-                    name: consumer.name || 'Unknown Consumer',
-                    email: consumer.email || '',
-                    mobile: consumer.mobile || '',
-                    nidNo: consumer.nidNo || '',
-                    address: consumer.address || '',
-                    meterNo: consumer.meterNo || 'N/A',
-                    feederName: consumer.feederName || 'N/A',
-                    consumerType: consumer.consumerType || 'residential',
-                    userType: consumer.userType || 'existing_consumer',
-                    role: consumer.role || 'consumer',
-                    isActive: consumer.isActive !== undefined ? consumer.isActive : true,
-                    isClaimed: consumer.isClaimed || false,
-                    isRegistered: consumer.isRegistered || false,
-                    claimedBy: consumer.claimedBy || null,
-                    registeredBy: consumer.registeredBy || null,
-                    status: consumer.isRegistered ? 'Registered' :
-                        consumer.isClaimed ? 'Claimed' : 'Pending',
-                }));
+                // ✅ Process consumers with billing summary
+                const processedConsumers = await Promise.all(
+                    consumersData.map(async (consumer: any) => {
+                        let billingSummary = { totalBills: 0, totalPaid: 0, totalDue: 0, lastPaymentDate: null };
 
-                // ✅ Fetch billing summary for each consumer
-                const consumersWithBills = await Promise.all(
-                    processedConsumers.map(async (consumer: any) => {
+                        // ✅ Fetch billing summary for each consumer
                         try {
                             const consumerId = consumer._id || consumer.id;
-                            if (!consumerId) return consumer;
+                            if (consumerId) {
+                                const summaryResponse = await fetch(
+                                    `${API_URL}/api/billing/consumers/${consumerId}/summary`,
+                                    {
+                                        headers: {
+                                            'Authorization': token ? `Bearer ${token}` : '',
+                                            'Content-Type': 'application/json',
+                                        },
+                                    }
+                                );
 
-                            const summaryResponse = await fetch(
-                                `${API_URL}/api/billing/consumers/${consumerId}/summary`,
-                                {
-                                    headers: {
-                                        'Authorization': token ? `Bearer ${token}` : '',
-                                        'Content-Type': 'application/json',
-                                    },
-                                }
-                            );
-
-                            if (summaryResponse.ok) {
-                                const summaryData = await summaryResponse.json();
-                                if (summaryData.success && summaryData.data) {
-                                    const billingSummary = summaryData.data.billingSummary || {};
-                                    return {
-                                        ...consumer,
-                                        totalBills: billingSummary.totalBills || 0,
-                                        totalPaid: billingSummary.totalPaid || 0,
-                                        totalDue: billingSummary.totalDue || 0,
-                                        lastPaymentDate: billingSummary.lastPaymentDate || consumer.lastPaymentDate,
-                                    };
+                                if (summaryResponse.ok) {
+                                    const summaryData = await summaryResponse.json();
+                                    if (summaryData.success && summaryData.data) {
+                                        const summary = summaryData.data.billingSummary || {};
+                                        billingSummary = {
+                                            totalBills: summary.totalBills || 0,
+                                            totalPaid: summary.totalPaid || 0,
+                                            totalDue: summary.totalDue || 0,
+                                            lastPaymentDate: summary.lastPaymentDate || null,
+                                        };
+                                    }
                                 }
                             }
-                            return consumer;
                         } catch (error) {
                             console.error(`Error fetching summary for ${consumer.name}:`, error);
-                            return consumer;
                         }
+
+                        const hasMeter = !!(consumer.meterNo && consumer.meterNo !== 'N/A' && consumer.meterNo !== '');
+
+                        return {
+                            ...consumer,
+                            id: consumer._id || consumer.id,
+                            _id: consumer._id || consumer.id,
+                            name: consumer.name || 'Unknown Consumer',
+                            email: consumer.email || '',
+                            mobile: consumer.mobile || '',
+                            nidNo: consumer.nidNo || '',
+                            address: consumer.address || '',
+                            meterNo: consumer.meterNo || 'N/A',
+                            feederName: consumer.feederName || 'N/A',
+                            consumerType: consumer.consumerType || 'residential',
+                            userType: consumer.userType || 'existing_consumer',
+                            role: consumer.role || 'consumer',
+                            isActive: consumer.isActive !== undefined ? consumer.isActive : true,
+                            isClaimed: consumer.isClaimed || false,
+                            isRegistered: consumer.isRegistered || false,
+                            claimedBy: consumer.claimedBy || null,
+                            registeredBy: consumer.registeredBy || null,
+                            userId: consumer.userId || null,
+                            hasMeter: hasMeter,
+                            status: consumer.isRegistered ? 'Registered' :
+                                consumer.isClaimed ? 'Claimed' : 'Pending',
+                            totalBills: billingSummary.totalBills,
+                            totalPaid: billingSummary.totalPaid,
+                            totalDue: billingSummary.totalDue,
+                            lastPaymentDate: billingSummary.lastPaymentDate || consumer.lastPaymentDate,
+                        };
                     })
                 );
 
-                setConsumers(consumersWithBills);
-                updateStats(consumersWithBills);
+                setConsumers(processedConsumers);
+                updateStats(processedConsumers);
                 setError(null);
             } else {
                 throw new Error(data.message || 'No consumer data received');
@@ -257,6 +269,8 @@ export default function BillingWingsAllConsumersPage() {
         const unclaimed = consumersData.filter(c => !c.isClaimed).length;
         const registered = consumersData.filter(c => c.isRegistered).length;
         const pending = consumersData.filter(c => !c.isRegistered).length;
+        const hasMeter = consumersData.filter(c => c.hasMeter).length;
+        const noMeter = consumersData.filter(c => !c.hasMeter).length;
 
         setStats({
             total,
@@ -269,6 +283,8 @@ export default function BillingWingsAllConsumersPage() {
             unclaimed,
             registered,
             pending,
+            hasMeter,
+            noMeter,
         });
     };
 
@@ -293,7 +309,7 @@ export default function BillingWingsAllConsumersPage() {
     const getConsumerStatus = (consumer: Consumer): StatusBadge => {
         if (consumer.isRegistered && consumer.isClaimed) {
             return {
-                label: '✅ Registered',
+                label: 'Registered',
                 color: 'bg-green-100 text-green-700',
                 icon: CheckCircle
             };
@@ -404,7 +420,7 @@ export default function BillingWingsAllConsumersPage() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                 <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
                     <div className="flex items-center justify-between">
                         <div>
@@ -452,11 +468,11 @@ export default function BillingWingsAllConsumersPage() {
                 <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm text-gray-500">Pending</p>
-                            <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
+                            <p className="text-sm text-gray-500">Has Meter</p>
+                            <p className="text-2xl font-bold text-orange-600">{stats.hasMeter}</p>
                         </div>
-                        <div className="p-2 rounded-xl bg-yellow-100">
-                            <Clock size={18} className="text-yellow-600" />
+                        <div className="p-2 rounded-xl bg-orange-100">
+                            <Package size={18} className="text-orange-600" />
                         </div>
                     </div>
                 </div>
@@ -512,7 +528,7 @@ export default function BillingWingsAllConsumersPage() {
                             }}
                             className="px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                         >
-                            <option value="all">All</option>
+                            <option value="all">All Registration</option>
                             <option value="registered">Registered</option>
                             <option value="pending">Pending</option>
                         </select>
@@ -546,6 +562,7 @@ export default function BillingWingsAllConsumersPage() {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meter</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Feeder</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bills</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Due</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Registration</th>
@@ -555,7 +572,7 @@ export default function BillingWingsAllConsumersPage() {
                         <tbody className="divide-y divide-gray-100">
                             {paginatedConsumers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                                    <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                                         {searchTerm || filterType !== 'all' || filterStatus !== 'all' || filterRegistration !== 'all'
                                             ? 'No consumers match your filters.'
                                             : 'No consumers found in the system.'}
@@ -582,7 +599,11 @@ export default function BillingWingsAllConsumersPage() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className="text-sm font-medium text-emerald-600">{consumer.meterNo || 'N/A'}</span>
+                                                {consumer.hasMeter ? (
+                                                    <span className="text-sm font-medium text-emerald-600">{consumer.meterNo}</span>
+                                                ) : (
+                                                    <span className="text-sm text-gray-400">No meter</span>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-2 py-1 text-xs font-medium rounded-full ${getConsumerTypeColor(consumer.consumerType)}`}>
@@ -591,6 +612,9 @@ export default function BillingWingsAllConsumersPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className="text-sm text-gray-600">{consumer.feederName || 'N/A'}</span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-sm font-medium text-gray-800">{consumer.totalBills || 0}</span>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`text-sm font-medium ${(consumer.totalDue || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
@@ -739,10 +763,11 @@ export default function BillingWingsAllConsumersPage() {
                                     }`}>
                                     {selectedConsumer.isRegistered ? '✓ Registered' : 'Pending Registration'}
                                 </span>
-                                <span className={`px-3 py-1 text-xs font-medium rounded-full ${selectedConsumer.isClaimed ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
-                                    }`}>
-                                    {selectedConsumer.isClaimed ? '✓ Claimed' : 'Not Claimed'}
-                                </span>
+                                {selectedConsumer.hasMeter && (
+                                    <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-700">
+                                        Meter: {selectedConsumer.meterNo}
+                                    </span>
+                                )}
                             </div>
                         </div>
 
@@ -789,6 +814,12 @@ export default function BillingWingsAllConsumersPage() {
                                     </div>
                                 </>
                             )}
+                            {selectedConsumer.userId && (
+                                <div className="col-span-2">
+                                    <p className="text-xs text-gray-500">User ID</p>
+                                    <p className="text-sm font-medium text-blue-600">{selectedConsumer.userId}</p>
+                                </div>
+                            )}
                             <div className="col-span-2">
                                 <p className="text-xs text-gray-500">Address</p>
                                 <p className="text-sm font-medium">{selectedConsumer.address || 'N/A'}</p>
@@ -798,16 +829,16 @@ export default function BillingWingsAllConsumersPage() {
                             <div className="col-span-2 border-t border-gray-100 pt-4">
                                 <p className="text-xs text-gray-500 font-medium mb-2">Billing Summary</p>
                                 <div className="grid grid-cols-3 gap-4">
-                                    <div className="bg-blue-50 rounded-lg p-3 text-center">
-                                        <p className="text-lg font-bold text-blue-600">{selectedConsumer.totalBills || 0}</p>
+                                    <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-100">
+                                        <p className="text-xl font-bold text-blue-600">{selectedConsumer.totalBills || 0}</p>
                                         <p className="text-xs text-gray-500">Total Bills</p>
                                     </div>
-                                    <div className="bg-green-50 rounded-lg p-3 text-center">
-                                        <p className="text-lg font-bold text-green-600">৳{(selectedConsumer.totalPaid || 0).toLocaleString()}</p>
+                                    <div className="bg-green-50 rounded-lg p-3 text-center border border-green-100">
+                                        <p className="text-xl font-bold text-green-600">৳{(selectedConsumer.totalPaid || 0).toLocaleString()}</p>
                                         <p className="text-xs text-gray-500">Total Paid</p>
                                     </div>
-                                    <div className="bg-red-50 rounded-lg p-3 text-center">
-                                        <p className="text-lg font-bold text-red-600">৳{(selectedConsumer.totalDue || 0).toLocaleString()}</p>
+                                    <div className="bg-red-50 rounded-lg p-3 text-center border border-red-100">
+                                        <p className="text-xl font-bold text-red-600">৳{(selectedConsumer.totalDue || 0).toLocaleString()}</p>
                                         <p className="text-xs text-gray-500">Total Due</p>
                                     </div>
                                 </div>
@@ -830,18 +861,18 @@ export default function BillingWingsAllConsumersPage() {
                         </div>
 
                         <div className="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-100">
-                            <button
-                                onClick={() => {
-                                    setShowDetailsModal(false);
-                                    if (selectedConsumer.meterNo) {
-                                        router.push(`/dashboard/billing_wings/bills?meter=${selectedConsumer.meterNo}`);
-                                    }
-                                }}
-                                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
-                            >
-                                <FileText size={16} />
-                                <span>View Bills</span>
-                            </button>
+                            {selectedConsumer.meterNo && selectedConsumer.meterNo !== 'N/A' && (
+                                <button
+                                    onClick={() => {
+                                        setShowDetailsModal(false);
+                                        router.push(`/dashboard/billing_wings/all-bills?meter=${selectedConsumer.meterNo}`);
+                                    }}
+                                    className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                                >
+                                    <FileText size={16} />
+                                    <span>View Bills</span>
+                                </button>
+                            )}
                             <button
                                 onClick={() => setShowDetailsModal(false)}
                                 className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
