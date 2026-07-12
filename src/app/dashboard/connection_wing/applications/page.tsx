@@ -16,8 +16,6 @@ import {
     ChevronRight,
     RefreshCw,
     Loader2,
-    TrendingUp,
-    TrendingDown,
     Calendar,
     X,
     User,
@@ -39,6 +37,10 @@ import {
     Save,
     Hourglass,
     ShieldAlert,
+    Hash,
+    Factory,
+    Info,
+    AlertCircle,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -70,6 +72,34 @@ interface ConnectionApplication {
     updatedAt: string;
 }
 
+interface MeterFormData {
+    meterNo: string;
+    meterSerialNo: string;
+    meterType: 'single_phase' | 'three_phase';
+    manufacturer: string;
+    feederName: string;
+    connectionDate: string;
+    consumerType: 'residential' | 'commercial' | 'industrial';
+    initialReading: string;
+    specialNote: string;
+    consumerName: string;
+    address: string;
+    mobile: string;
+    email: string;
+}
+
+interface MeterCheckResult {
+    exists: boolean;
+    isAvailable: boolean;
+    message: string;
+    consumerName?: string;
+    claimedBy?: string;
+    status?: string;
+}
+
+const FEEDER_OPTIONS = ['Trimohoni', 'Circuit-Hose', 'DC-Court', 'N.S-Road'];
+const MANUFACTURER_OPTIONS = ['ABB', 'Siemens', 'Schneider Electric', 'GE', 'L&T', 'WEG', 'C&S Electric', 'Other'];
+
 export default function ConnectionWingApplicationsPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
@@ -97,12 +127,28 @@ export default function ConnectionWingApplicationsPage() {
     });
     const [user, setUser] = useState<any>(null);
 
-    const [meterForm, setMeterForm] = useState({
+    // ✅ Complete meter form with all fields
+    const [meterForm, setMeterForm] = useState<MeterFormData>({
         meterNo: '',
+        meterSerialNo: '',
+        meterType: 'single_phase',
+        manufacturer: '',
+        feederName: '',
+        connectionDate: '',
+        consumerType: 'residential',
         initialReading: '',
-        connectionWingRemarks: '',
+        specialNote: '',
+        consumerName: '',
+        address: '',
+        mobile: '',
+        email: '',
     });
     const [meterErrors, setMeterErrors] = useState<{ [key: string]: string }>({});
+
+    // ✅ Meter check states
+    const [isCheckingMeter, setIsCheckingMeter] = useState(false);
+    const [meterCheckResult, setMeterCheckResult] = useState<MeterCheckResult | null>(null);
+    const [meterChecked, setMeterChecked] = useState(false);
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
     const ITEMS_PER_PAGE = 5;
@@ -250,27 +296,114 @@ export default function ConnectionWingApplicationsPage() {
         setShowActionModal(true);
     };
 
+    // ✅ Open assign meter modal with pre-filled data from application
     const openAssignMeterModal = (app: ConnectionApplication) => {
         setSelectedApp(app);
         setMeterForm({
             meterNo: '',
-            initialReading: '',
-            connectionWingRemarks: '',
+            meterSerialNo: '',
+            meterType: 'single_phase',
+            manufacturer: '',
+            feederName: app.feederName || '',
+            connectionDate: new Date().toISOString().split('T')[0],
+            consumerType: app.connectionType || 'residential',
+            initialReading: '0',
+            specialNote: `Assigned for application: ${app.applicationId}`,
+            consumerName: app.applicantName || '',
+            address: app.address || '',
+            mobile: app.mobile || '',
+            email: app.email || '',
         });
         setMeterErrors({});
+        setMeterCheckResult(null);
+        setMeterChecked(false);
         setShowAssignMeterModal(true);
     };
 
+    // ✅ Check meter availability
+    const checkMeterAvailability = async () => {
+        const meterNo = meterForm.meterNo.trim();
+
+        if (!meterNo) {
+            setMeterErrors(prev => ({ ...prev, meterNo: 'Please enter a meter number to check' }));
+            return;
+        }
+
+        setIsCheckingMeter(true);
+        setMeterCheckResult(null);
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(
+                `${API_URL}/api/meters/check-availability/${encodeURIComponent(meterNo)}`,
+                {
+                    headers: {
+                        'Authorization': token ? `Bearer ${token}` : '',
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to check meter availability');
+            }
+
+            setMeterCheckResult(data.data);
+            setMeterChecked(true);
+
+            if (data.data.exists) {
+                setMeterErrors(prev => ({
+                    ...prev,
+                    meterNo: data.data.message || 'This meter number already exists in the system'
+                }));
+            } else {
+                setMeterErrors(prev => ({ ...prev, meterNo: '' }));
+            }
+
+        } catch (error: any) {
+            console.error('Check meter error:', error);
+            setMeterErrors(prev => ({ ...prev, meterNo: error.message || 'Failed to check meter' }));
+        } finally {
+            setIsCheckingMeter(false);
+        }
+    };
+
+    // ✅ Submit assign meter with all fields
     const submitAssignMeter = async () => {
         if (!selectedApp) return;
 
         const errors: { [key: string]: string } = {};
+
+        // Validate all required fields
         if (!meterForm.meterNo.trim()) {
             errors.meterNo = 'Meter number is required';
+        } else if (meterCheckResult?.exists) {
+            errors.meterNo = 'This meter number already exists';
         }
-        if (!meterForm.initialReading) {
-            errors.initialReading = 'Initial reading is required';
-        } else if (isNaN(Number(meterForm.initialReading)) || Number(meterForm.initialReading) < 0) {
+
+        if (!meterForm.meterSerialNo.trim()) {
+            errors.meterSerialNo = 'Meter serial number is required';
+        }
+
+        if (!meterForm.meterType) {
+            errors.meterType = 'Please select meter type';
+        }
+
+        if (!meterForm.manufacturer) {
+            errors.manufacturer = 'Please select manufacturer';
+        }
+
+        if (!meterForm.feederName) {
+            errors.feederName = 'Please select a feeder';
+        }
+
+        if (!meterForm.connectionDate) {
+            errors.connectionDate = 'Connection date is required';
+        }
+
+        if (meterForm.initialReading && (isNaN(Number(meterForm.initialReading)) || Number(meterForm.initialReading) < 0)) {
             errors.initialReading = 'Please enter a valid reading';
         }
 
@@ -282,6 +415,8 @@ export default function ConnectionWingApplicationsPage() {
         setIsSubmitting(true);
         try {
             const token = localStorage.getItem('auth_token');
+
+            // ✅ Send complete meter data to backend
             const response = await fetch(
                 `${API_URL}/api/connection-wing/applications/${selectedApp.applicationId}/assign-meter`,
                 {
@@ -291,9 +426,20 @@ export default function ConnectionWingApplicationsPage() {
                         'Authorization': token ? `Bearer ${token}` : '',
                     },
                     body: JSON.stringify({
-                        meterNo: meterForm.meterNo,
-                        initialReading: Number(meterForm.initialReading),
-                        connectionWingRemarks: meterForm.connectionWingRemarks || 'Meter assigned successfully',
+                        meterNo: meterForm.meterNo.trim(),
+                        meterSerialNo: meterForm.meterSerialNo.trim(),
+                        meterType: meterForm.meterType,
+                        manufacturer: meterForm.manufacturer,
+                        feederName: meterForm.feederName,
+                        connectionDate: meterForm.connectionDate,
+                        consumerType: meterForm.consumerType,
+                        initialReading: Number(meterForm.initialReading) || 0,
+                        specialNote: meterForm.specialNote || '',
+                        consumerName: meterForm.consumerName || selectedApp.applicantName,
+                        address: meterForm.address || selectedApp.address,
+                        mobile: meterForm.mobile || selectedApp.mobile,
+                        email: meterForm.email || selectedApp.email,
+                        connectionWingRemarks: meterForm.specialNote || 'Meter assigned successfully',
                     }),
                 }
             );
@@ -316,9 +462,8 @@ export default function ConnectionWingApplicationsPage() {
         }
     };
 
-    // Action button function with full flow
+    // Action button function
     const getActionButton = (app: ConnectionApplication) => {
-        // Check if application is waiting for XEN approval
         const isWaitingForXen = ['pending_payment', 'payment_done', 'under_xen_review'].includes(app.status);
 
         if (isWaitingForXen) {
@@ -815,16 +960,19 @@ export default function ConnectionWingApplicationsPage() {
                 </div>
             )}
 
-            {/* Assign Meter Modal */}
+            {/* ✅ Updated Assign Meter Modal with all fields */}
             {showAssignMeterModal && selectedApp && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+                    <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center space-x-3">
                                 <div className="p-2 bg-emerald-100 rounded-full">
                                     <Plus size={20} className="text-emerald-600" />
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-800">Assign Meter</h3>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-800">Assign Meter</h3>
+                                    <p className="text-sm text-gray-500">Add meter details for {selectedApp.applicationId}</p>
+                                </div>
                             </div>
                             <button
                                 onClick={() => setShowAssignMeterModal(false)}
@@ -834,55 +982,237 @@ export default function ConnectionWingApplicationsPage() {
                             </button>
                         </div>
 
-                        <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                            <p className="text-sm text-gray-600">
-                                <span className="font-medium">Application:</span> {selectedApp.applicationId}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                                <span className="font-medium">Applicant:</span> {selectedApp.applicantName}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                                <span className="font-medium">Type:</span> {getConnectionTypeLabel(selectedApp.connectionType)}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                                <span className="font-medium">Load:</span> {selectedApp.loadRequired} kW
-                            </p>
-                            <p className="text-sm text-gray-600">
-                                <span className="font-medium">Current Status:</span> <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700">Connection Completed</span>
-                            </p>
+                        {/* Application Info */}
+                        <div className="bg-gray-50 rounded-lg p-4 mb-6 grid grid-cols-2 gap-3">
+                            <div>
+                                <p className="text-xs text-gray-500">Application ID</p>
+                                <p className="text-sm font-medium text-gray-800">{selectedApp.applicationId}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Applicant</p>
+                                <p className="text-sm font-medium text-gray-800">{selectedApp.applicantName}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Connection Type</p>
+                                <p className="text-sm font-medium text-gray-800">{getConnectionTypeLabel(selectedApp.connectionType)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Load Required</p>
+                                <p className="text-sm font-medium text-gray-800">{selectedApp.loadRequired} kW</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Feeder</p>
+                                <p className="text-sm font-medium text-gray-800">{selectedApp.feederName}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Address</p>
+                                <p className="text-sm font-medium text-gray-800 truncate">{selectedApp.address}</p>
+                            </div>
                         </div>
 
                         {meterErrors.submit && (
-                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
-                                {meterErrors.submit}
+                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center space-x-2">
+                                <AlertCircle size={16} />
+                                <span>{meterErrors.submit}</span>
                             </div>
                         )}
 
-                        <div className="space-y-4">
-                            <div>
+                        {/* Meter Form */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Meter Number with Check */}
+                            <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                                     Meter Number <span className="text-red-500">*</span>
                                 </label>
-                                <div className="relative">
-                                    <CreditCard size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        value={meterForm.meterNo}
-                                        onChange={(e) => setMeterForm(prev => ({ ...prev, meterNo: e.target.value }))}
-                                        className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${meterErrors.meterNo ? 'border-red-500' : 'border-gray-200'
-                                            }`}
-                                        placeholder="e.g., MTR-2026-012"
-                                    />
+                                <div className="flex gap-3">
+                                    <div className="relative flex-1">
+                                        <Hash size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            value={meterForm.meterNo}
+                                            onChange={(e) => {
+                                                setMeterForm(prev => ({ ...prev, meterNo: e.target.value }));
+                                                setMeterChecked(false);
+                                                setMeterCheckResult(null);
+                                            }}
+                                            className={`w-full pl-10 pr-12 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${meterErrors.meterNo ? 'border-red-500 bg-red-50' :
+                                                meterCheckResult?.exists ? 'border-red-500 bg-red-50' :
+                                                    meterCheckResult?.isAvailable ? 'border-green-500 bg-green-50' :
+                                                        'border-gray-200'
+                                                }`}
+                                            placeholder="e.g., MTR-2026-016"
+                                            disabled={isCheckingMeter}
+                                        />
+                                        {isCheckingMeter && (
+                                            <Loader2 size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                                        )}
+                                        {!isCheckingMeter && meterCheckResult?.isAvailable && (
+                                            <CheckCircle size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500" />
+                                        )}
+                                        {!isCheckingMeter && meterCheckResult?.exists && (
+                                            <X size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500" />
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={checkMeterAvailability}
+                                        disabled={isCheckingMeter || !meterForm.meterNo.trim()}
+                                        className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all flex items-center space-x-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm hover:shadow-md"
+                                    >
+                                        {isCheckingMeter ? (
+                                            <>
+                                                <Loader2 size={18} className="animate-spin" />
+                                                <span>Checking...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Search size={18} />
+                                                <span>Check</span>
+                                            </>
+                                        )}
+                                    </button>
                                 </div>
                                 {meterErrors.meterNo && (
-                                    <p className="text-red-500 text-xs mt-1">{meterErrors.meterNo}</p>
+                                    <p className="text-red-500 text-sm mt-1">{meterErrors.meterNo}</p>
                                 )}
-                                <p className="text-xs text-gray-400 mt-1">Format: MTR-YYYY-XXX</p>
+                                {meterCheckResult?.isAvailable && (
+                                    <p className="text-emerald-600 text-sm mt-1 flex items-center space-x-1">
+                                        <Check size={14} />
+                                        <span>✅ Meter is available</span>
+                                    </p>
+                                )}
+                                <p className="text-xs text-gray-400 mt-1 flex items-center space-x-1">
+                                    <Info size={12} />
+                                    <span>Click "Check" to verify if this meter number is available</span>
+                                </p>
                             </div>
 
+                            {/* Meter Serial Number */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                    Initial Reading (kWh) <span className="text-red-500">*</span>
+                                    Meter Serial No <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Hash size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={meterForm.meterSerialNo}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, meterSerialNo: e.target.value }))}
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${meterErrors.meterSerialNo ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                            }`}
+                                        placeholder="e.g., SN-2026-001"
+                                    />
+                                </div>
+                                {meterErrors.meterSerialNo && (
+                                    <p className="text-red-500 text-sm mt-1">{meterErrors.meterSerialNo}</p>
+                                )}
+                            </div>
+
+                            {/* Meter Type */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Meter Type <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Zap size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <select
+                                        value={meterForm.meterType}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, meterType: e.target.value as any }))}
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white transition-all ${meterErrors.meterType ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                            }`}
+                                    >
+                                        <option value="single_phase">Single Phase</option>
+                                        <option value="three_phase">Three Phase</option>
+                                    </select>
+                                </div>
+                                {meterErrors.meterType && <p className="text-red-500 text-sm mt-1">{meterErrors.meterType}</p>}
+                            </div>
+
+                            {/* Manufacturer */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Manufacturer <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Factory size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <select
+                                        value={meterForm.manufacturer}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, manufacturer: e.target.value }))}
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white transition-all ${meterErrors.manufacturer ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                            }`}
+                                    >
+                                        <option value="">Select Manufacturer</option>
+                                        {MANUFACTURER_OPTIONS.map((manufacturer) => (
+                                            <option key={manufacturer} value={manufacturer}>{manufacturer}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {meterErrors.manufacturer && <p className="text-red-500 text-sm mt-1">{meterErrors.manufacturer}</p>}
+                            </div>
+
+                            {/* Feeder Name */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Feeder Name <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <MapPin size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <select
+                                        value={meterForm.feederName}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, feederName: e.target.value }))}
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white transition-all ${meterErrors.feederName ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                            }`}
+                                    >
+                                        <option value="">Select Feeder</option>
+                                        {FEEDER_OPTIONS.map((feeder) => (
+                                            <option key={feeder} value={feeder}>{feeder}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {meterErrors.feederName && <p className="text-red-500 text-sm mt-1">{meterErrors.feederName}</p>}
+                            </div>
+
+                            {/* Connection Date */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Connection Date <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Calendar size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="date"
+                                        value={meterForm.connectionDate}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, connectionDate: e.target.value }))}
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${meterErrors.connectionDate ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                            }`}
+                                    />
+                                </div>
+                                {meterErrors.connectionDate && <p className="text-red-500 text-sm mt-1">{meterErrors.connectionDate}</p>}
+                            </div>
+
+                            {/* Consumer Type */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Consumer Type
+                                </label>
+                                <div className="relative">
+                                    <Building size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <select
+                                        value={meterForm.consumerType}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, consumerType: e.target.value as any }))}
+                                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white transition-all"
+                                    >
+                                        <option value="residential">Residential</option>
+                                        <option value="commercial">Commercial</option>
+                                        <option value="industrial">Industrial</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Initial Reading */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Initial Reading (kWh)
                                 </label>
                                 <div className="relative">
                                     <Zap size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -892,55 +1222,76 @@ export default function ConnectionWingApplicationsPage() {
                                         onChange={(e) => setMeterForm(prev => ({ ...prev, initialReading: e.target.value }))}
                                         step="0.01"
                                         min="0"
-                                        className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${meterErrors.initialReading ? 'border-red-500' : 'border-gray-200'
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${meterErrors.initialReading ? 'border-red-500 bg-red-50' : 'border-gray-200'
                                             }`}
-                                        placeholder="Enter initial reading (usually 0)"
+                                        placeholder="0.00"
                                     />
                                 </div>
-                                {meterErrors.initialReading && (
-                                    <p className="text-red-500 text-xs mt-1">{meterErrors.initialReading}</p>
-                                )}
+                                {meterErrors.initialReading && <p className="text-red-500 text-sm mt-1">{meterErrors.initialReading}</p>}
                             </div>
 
-                            <div>
+                            {/* Special Note */}
+                            <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                    Remarks <span className="text-gray-400 text-xs">(Optional)</span>
+                                    Special Note
                                 </label>
-                                <textarea
-                                    value={meterForm.connectionWingRemarks}
-                                    onChange={(e) => setMeterForm(prev => ({ ...prev, connectionWingRemarks: e.target.value }))}
-                                    rows={2}
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                    placeholder="Any additional notes about meter installation..."
-                                />
+                                <div className="relative">
+                                    <FileText size={18} className="absolute left-3 top-3 text-gray-400" />
+                                    <textarea
+                                        value={meterForm.specialNote}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, specialNote: e.target.value }))}
+                                        rows={2}
+                                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                                        placeholder="Any special notes about this meter..."
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-100">
-                            <button
-                                onClick={() => setShowAssignMeterModal(false)}
-                                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={submitAssignMeter}
-                                disabled={isSubmitting}
-                                className={`px-4 py-2 bg-emerald-600 text-white rounded-lg transition-colors flex items-center space-x-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-emerald-700'
-                                    }`}
-                            >
-                                {isSubmitting ? (
-                                    <>
-                                        <Loader2 size={16} className="animate-spin" />
-                                        <span>Assigning...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save size={16} />
-                                        <span>Assign Meter</span>
-                                    </>
+                        {/* Action Buttons */}
+                        <div className="flex items-center justify-between pt-6 mt-4 border-t border-gray-100">
+                            <div className="flex items-center space-x-2">
+                                {meterCheckResult?.isAvailable && (
+                                    <span className="text-emerald-600 flex items-center space-x-1 text-sm font-medium">
+                                        <CheckCircle size={16} />
+                                        <span>✅ Meter is available</span>
+                                    </span>
                                 )}
-                            </button>
+                                {meterForm.meterNo && !meterChecked && (
+                                    <span className="text-amber-600 flex items-center space-x-1 text-sm font-medium">
+                                        <AlertCircle size={16} />
+                                        <span>Please check meter availability</span>
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center space-x-3">
+                                <button
+                                    onClick={() => setShowAssignMeterModal(false)}
+                                    className="px-6 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-medium"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={submitAssignMeter}
+                                    disabled={isSubmitting || !meterCheckResult?.isAvailable}
+                                    className={`px-8 py-3 bg-emerald-600 text-white rounded-xl font-medium flex items-center space-x-2 transition-all shadow-sm hover:shadow-md ${isSubmitting || !meterCheckResult?.isAvailable
+                                        ? 'opacity-50 cursor-not-allowed'
+                                        : 'hover:bg-emerald-700'
+                                        }`}
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <Loader2 size={20} className="animate-spin" />
+                                            <span>Assigning...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save size={20} />
+                                            <span>Assign Meter</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

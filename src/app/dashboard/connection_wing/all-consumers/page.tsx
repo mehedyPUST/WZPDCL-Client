@@ -9,6 +9,8 @@ import {
     Eye,
     ChevronLeft,
     ChevronRight,
+    ChevronUp,
+    ChevronDown,
     RefreshCw,
     Loader2,
     User,
@@ -39,8 +41,8 @@ import {
     Shield,
     ClipboardCheck,
     List,
-    ChevronDown,
-    ChevronUp,
+    Hash,
+    Factory,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -53,6 +55,9 @@ interface Consumer {
     nidNo: string;
     address: string;
     meterNo: string;
+    meterSerialNo?: string;
+    meterType?: string;
+    manufacturer?: string;
     feederName: string;
     consumerType: 'residential' | 'commercial' | 'industrial';
     isActive: boolean;
@@ -69,7 +74,6 @@ interface Consumer {
     totalPaid?: number;
     totalDue?: number;
     status?: string;
-    // ✅ Multiple meters support
     meters?: string[];
     meterDetails?: any[];
 }
@@ -186,6 +190,9 @@ export default function ConnectionWingAllConsumersPage() {
                     nidNo: consumer.nidNo || '',
                     address: consumer.address || '',
                     meterNo: consumer.meterNo || 'N/A',
+                    meterSerialNo: consumer.meterSerialNo || '',
+                    meterType: consumer.meterType || '',
+                    manufacturer: consumer.manufacturer || '',
                     feederName: consumer.feederName || 'N/A',
                     consumerType: consumer.consumerType || 'residential',
                     isActive: consumer.isActive !== undefined ? consumer.isActive : true,
@@ -197,8 +204,7 @@ export default function ConnectionWingAllConsumersPage() {
                     registeredAt: consumer.registeredAt || null,
                     userId: consumer.userId || null,
                     status: consumer.isRegistered ? 'Registered' : 'Pending',
-                    // ✅ Multiple meters
-                    meters: consumer.meters || [consumer.meterNo],
+                    meters: consumer.meters || (consumer.meterNo && consumer.meterNo !== 'N/A' ? [consumer.meterNo] : []),
                     meterDetails: consumer.meterDetails || [],
                 }));
 
@@ -230,7 +236,6 @@ export default function ConnectionWingAllConsumersPage() {
         const registered = consumersData.filter(c => c.isRegistered).length;
         const pending = consumersData.filter(c => !c.isRegistered).length;
 
-        // ✅ Count total meters
         let totalMeters = 0;
         consumersData.forEach(c => {
             if (c.meters && c.meters.length > 0) {
@@ -282,7 +287,7 @@ export default function ConnectionWingAllConsumersPage() {
             };
         } else if (consumer.isClaimed && !consumer.isRegistered) {
             return {
-                label: 'Claimed (Not Registered)',
+                label: 'Claimed (Not Reg)',
                 color: 'bg-yellow-100 text-yellow-700',
                 icon: Clock
             };
@@ -319,6 +324,7 @@ export default function ConnectionWingAllConsumersPage() {
             consumer.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             consumer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             consumer.meterNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            consumer.meterSerialNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             consumer.mobile?.includes(searchTerm) ||
             consumer.nidNo?.includes(searchTerm);
         const matchesType = filterType === 'all' || consumer.consumerType === filterType;
@@ -460,7 +466,7 @@ export default function ConnectionWingAllConsumersPage() {
                         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
                             type="text"
-                            placeholder="Search by name, email, meter number, NID, or mobile..."
+                            placeholder="Search by name, email, meter number, serial, NID, or mobile..."
                             value={searchTerm}
                             onChange={(e) => {
                                 setSearchTerm(e.target.value);
@@ -535,6 +541,7 @@ export default function ConnectionWingAllConsumersPage() {
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Consumer</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Primary Meter</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Serial</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Meters</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -545,7 +552,7 @@ export default function ConnectionWingAllConsumersPage() {
                         <tbody className="divide-y divide-gray-100">
                             {paginatedConsumers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                                         {searchTerm || filterType !== 'all' || filterStatus !== 'all' || filterRegistration !== 'all'
                                             ? 'No consumers match your filters.'
                                             : 'No consumers found in the system.'}
@@ -555,7 +562,7 @@ export default function ConnectionWingAllConsumersPage() {
                                 paginatedConsumers.map((consumer) => {
                                     const status = getConsumerStatus(consumer);
                                     const StatusIcon = status.icon;
-                                    const meterCount = consumer.meters?.length || (consumer.meterNo && consumer.meterNo !== 'N/A' ? 1 : 0);
+                                    const meterCount = consumer.meters?.length || 0;
                                     const hasMultipleMeters = meterCount > 1;
                                     const isExpanded = expandedConsumer === consumer._id;
 
@@ -577,6 +584,9 @@ export default function ConnectionWingAllConsumersPage() {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <span className="text-sm font-medium text-emerald-600">{consumer.meterNo || 'N/A'}</span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className="text-sm text-gray-600">{consumer.meterSerialNo || 'N/A'}</span>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center space-x-2">
@@ -638,7 +648,7 @@ export default function ConnectionWingAllConsumersPage() {
                                             {/* ✅ Expanded Meters Row */}
                                             {isExpanded && consumer.meters && consumer.meters.length > 0 && (
                                                 <tr className="bg-gray-50">
-                                                    <td colSpan={7} className="px-6 py-3">
+                                                    <td colSpan={8} className="px-6 py-3">
                                                         <div className="flex items-center space-x-2">
                                                             <List size={16} className="text-gray-400" />
                                                             <span className="text-sm font-medium text-gray-600">All Meters:</span>
@@ -647,8 +657,8 @@ export default function ConnectionWingAllConsumersPage() {
                                                                     <span
                                                                         key={index}
                                                                         className={`px-3 py-1 text-xs font-medium rounded-full ${meter === consumer.meterNo
-                                                                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                                                                                : 'bg-gray-100 text-gray-600'
+                                                                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                                                                            : 'bg-gray-100 text-gray-600'
                                                                             }`}
                                                                     >
                                                                         {meter}
@@ -791,6 +801,10 @@ export default function ConnectionWingAllConsumersPage() {
                                 <p className="text-sm font-bold text-emerald-600">{selectedConsumer.meterNo || 'N/A'}</p>
                             </div>
                             <div>
+                                <p className="text-xs text-gray-500">Meter Serial No</p>
+                                <p className="text-sm font-medium">{selectedConsumer.meterSerialNo || 'N/A'}</p>
+                            </div>
+                            <div>
                                 <p className="text-xs text-gray-500">Consumer Type</p>
                                 <span className={`px-2 py-1 text-xs font-medium rounded-full ${getConsumerTypeColor(selectedConsumer.consumerType)}`}>
                                     {getConsumerTypeLabel(selectedConsumer.consumerType)}
@@ -799,6 +813,14 @@ export default function ConnectionWingAllConsumersPage() {
                             <div>
                                 <p className="text-xs text-gray-500">Feeder</p>
                                 <p className="text-sm font-medium">{selectedConsumer.feederName || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Meter Type</p>
+                                <p className="text-sm font-medium">{selectedConsumer.meterType || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Manufacturer</p>
+                                <p className="text-sm font-medium">{selectedConsumer.manufacturer || 'N/A'}</p>
                             </div>
                             {/* ✅ All Meters */}
                             <div className="col-span-2">
@@ -809,8 +831,8 @@ export default function ConnectionWingAllConsumersPage() {
                                             <span
                                                 key={index}
                                                 className={`px-3 py-1 text-xs font-medium rounded-full ${meter === selectedConsumer.meterNo
-                                                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                                                        : 'bg-gray-100 text-gray-600'
+                                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                                                    : 'bg-gray-100 text-gray-600'
                                                     }`}
                                             >
                                                 {meter}

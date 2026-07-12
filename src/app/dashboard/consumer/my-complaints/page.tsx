@@ -23,6 +23,7 @@ import {
     Package,
     Phone,
     MapPin,
+    ChevronDown,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -47,6 +48,16 @@ interface Complaint {
     updatedAt: string;
 }
 
+interface Meter {
+    _id?: string;
+    meterNo: string;
+    meterType: string;
+    feederName: string;
+    consumerName: string;
+    consumerType: string;
+    isClaimed: boolean;
+}
+
 export default function ConsumerComplaintsPage() {
     const [complaints, setComplaints] = useState<Complaint[]>([]);
     const [loading, setLoading] = useState(true);
@@ -59,6 +70,8 @@ export default function ConsumerComplaintsPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [user, setUser] = useState<any>(null);
+    const [meters, setMeters] = useState<Meter[]>([]);
+    const [loadingMeters, setLoadingMeters] = useState(false);
 
     const [newComplaint, setNewComplaint] = useState({
         subject: '',
@@ -104,6 +117,7 @@ export default function ConsumerComplaintsPage() {
     useEffect(() => {
         if (user) {
             fetchComplaints();
+            fetchUserMeters();
         }
     }, [user]);
 
@@ -130,6 +144,56 @@ export default function ConsumerComplaintsPage() {
             setError(error.message || 'Failed to load complaints');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // ✅ Fetch user's meters for selection
+    const fetchUserMeters = async () => {
+        setLoadingMeters(true);
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(
+                `${API_URL}/api/user/meters/${user?.id}`,
+                {
+                    headers: {
+                        'Authorization': token ? `Bearer ${token}` : '',
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    setMeters(data.data.meters || []);
+
+                    // ✅ Auto-select first meter if available
+                    if (data.data.meters && data.data.meters.length > 0) {
+                        const firstMeter = data.data.meters[0];
+                        setNewComplaint(prev => ({
+                            ...prev,
+                            meterNo: firstMeter.meterNo,
+                            feederName: firstMeter.feederName || '',
+                        }));
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching meters:', error);
+        } finally {
+            setLoadingMeters(false);
+        }
+    };
+
+    // ✅ Handle meter selection
+    const handleMeterSelect = (meterNo: string) => {
+        const selectedMeter = meters.find(m => m.meterNo === meterNo);
+        if (selectedMeter) {
+            setNewComplaint(prev => ({
+                ...prev,
+                meterNo: selectedMeter.meterNo,
+                feederName: selectedMeter.feederName || '',
+            }));
         }
     };
 
@@ -410,65 +474,207 @@ export default function ConsumerComplaintsPage() {
                             </button>
                         </div>
 
+                        {error && (
+                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
+                                <AlertCircle size={16} className="text-red-600" />
+                                <p className="text-sm text-red-600">{error}</p>
+                            </div>
+                        )}
+
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Subject <span className="text-red-500">*</span></label>
-                                <input type="text" value={newComplaint.subject} onChange={(e) => setNewComplaint(prev => ({ ...prev, subject: e.target.value }))} className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Brief subject" required />
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Subject <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newComplaint.subject}
+                                    onChange={(e) => setNewComplaint(prev => ({ ...prev, subject: e.target.value }))}
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                    placeholder="Brief subject"
+                                    required
+                                />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Category <span className="text-red-500">*</span></label>
-                                <select value={newComplaint.category} onChange={(e) => setNewComplaint(prev => ({ ...prev, category: e.target.value }))} className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" required>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Category <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    value={newComplaint.category}
+                                    onChange={(e) => setNewComplaint(prev => ({ ...prev, category: e.target.value }))}
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                                    required
+                                >
                                     <option value="">Select Category</option>
-                                    {categories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
+                                    {categories.map((cat) => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                    ))}
                                 </select>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Priority</label>
-                                <select value={newComplaint.priority} onChange={(e) => setNewComplaint(prev => ({ ...prev, priority: e.target.value }))} className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
-                                    <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Priority
+                                </label>
+                                <select
+                                    value={newComplaint.priority}
+                                    onChange={(e) => setNewComplaint(prev => ({ ...prev, priority: e.target.value }))}
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                                >
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
                                 </select>
                             </div>
 
+                            {/* ✅ Meter Number - Select from user's meters */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Meter Number <span className="text-red-500">*</span></label>
-                                <div className="relative"><CreditCard size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" value={newComplaint.meterNo} onChange={(e) => setNewComplaint(prev => ({ ...prev, meterNo: e.target.value }))} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Enter meter number" required /></div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Meter Number <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Package size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <select
+                                        value={newComplaint.meterNo}
+                                        onChange={(e) => handleMeterSelect(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                                        required
+                                        disabled={loadingMeters}
+                                    >
+                                        <option value="">Select Meter</option>
+                                        {meters.map((meter) => (
+                                            <option key={meter.meterNo} value={meter.meterNo}>
+                                                {meter.meterNo} {meter.consumerType ? `(${meter.consumerType})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {loadingMeters && (
+                                        <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                                    )}
+                                </div>
+                                {meters.length === 0 && !loadingMeters && (
+                                    <p className="text-xs text-yellow-600 mt-1">
+                                        ⚠️ No meters found. Please claim a meter first.
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* ✅ Feeder Name - Auto-filled from meter selection */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Feeder Name <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Zap size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={newComplaint.feederName}
+                                        onChange={(e) => setNewComplaint(prev => ({ ...prev, feederName: e.target.value }))}
+                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                        placeholder="Auto-filled from meter selection"
+                                        required
+                                        disabled
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1">Auto-filled based on meter selection</p>
+                            </div>
+
+                            {/* ✅ Transformer Number - Optional */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Transformer Number <span className="text-gray-400 text-xs">(Optional)</span>
+                                </label>
+                                <div className="relative">
+                                    <Package size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <select
+                                        value={newComplaint.transformerNo}
+                                        onChange={(e) => setNewComplaint(prev => ({ ...prev, transformerNo: e.target.value }))}
+                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                                    >
+                                        <option value="">Select Transformer (Optional)</option>
+                                        {transformerOptions.map((tr) => (
+                                            <option key={tr} value={tr}>{tr}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Feeder Name <span className="text-red-500">*</span></label>
-                                <div className="relative"><Zap size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><select value={newComplaint.feederName} onChange={(e) => setNewComplaint(prev => ({ ...prev, feederName: e.target.value }))} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" required>
-                                    <option value="">Select Feeder</option>{feederOptions.map((feeder) => (<option key={feeder} value={feeder}>{feeder}</option>))}
-                                </select></div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Contact Number <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={newComplaint.contactNumber}
+                                        onChange={(e) => setNewComplaint(prev => ({ ...prev, contactNumber: e.target.value }))}
+                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                        placeholder="017XX-XXXXXX"
+                                        required
+                                    />
+                                </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Transformer Number <span className="text-red-500">*</span></label>
-                                <div className="relative"><Package size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><select value={newComplaint.transformerNo} onChange={(e) => setNewComplaint(prev => ({ ...prev, transformerNo: e.target.value }))} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white" required>
-                                    <option value="">Select Transformer</option>{transformerOptions.map((tr) => (<option key={tr} value={tr}>{tr}</option>))}
-                                </select></div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Address <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <MapPin size={18} className="absolute left-3 top-3 text-gray-400" />
+                                    <textarea
+                                        value={newComplaint.address}
+                                        onChange={(e) => setNewComplaint(prev => ({ ...prev, address: e.target.value }))}
+                                        rows={2}
+                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                        placeholder="Complete address"
+                                        required
+                                    />
+                                </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Contact Number <span className="text-red-500">*</span></label>
-                                <div className="relative"><Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" value={newComplaint.contactNumber} onChange={(e) => setNewComplaint(prev => ({ ...prev, contactNumber: e.target.value }))} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="017XX-XXXXXX" required /></div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Description <span className="text-red-500">*</span>
+                                </label>
+                                <textarea
+                                    value={newComplaint.description}
+                                    onChange={(e) => setNewComplaint(prev => ({ ...prev, description: e.target.value }))}
+                                    rows={3}
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                    placeholder="Describe your complaint in detail"
+                                    required
+                                />
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Address <span className="text-red-500">*</span></label>
-                                <div className="relative"><MapPin size={18} className="absolute left-3 top-3 text-gray-400" /><textarea value={newComplaint.address} onChange={(e) => setNewComplaint(prev => ({ ...prev, address: e.target.value }))} rows={2} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Complete address" required /></div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Description <span className="text-red-500">*</span></label>
-                                <textarea value={newComplaint.description} onChange={(e) => setNewComplaint(prev => ({ ...prev, description: e.target.value }))} rows={3} className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Describe your complaint in detail" required />
-                            </div>
-
-                            <div className="flex items-center justify-end space-x-3 pt-4">
-                                <button type="button" onClick={() => setShowNewComplaint(false)} className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">Cancel</button>
-                                <button type="submit" disabled={isSubmitting} className={`px-4 py-2 bg-emerald-600 text-white rounded-lg flex items-center space-x-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-emerald-700'}`}>
-                                    {isSubmitting ? <><Loader2 size={16} className="animate-spin" /><span>Submitting...</span></> : <><Send size={16} /><span>Submit</span></>}
+                            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowNewComplaint(false)}
+                                    className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting || meters.length === 0}
+                                    className={`px-4 py-2 bg-emerald-600 text-white rounded-lg flex items-center space-x-2 transition-colors ${isSubmitting || meters.length === 0
+                                            ? 'opacity-70 cursor-not-allowed'
+                                            : 'hover:bg-emerald-700'
+                                        }`}
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <Loader2 size={16} className="animate-spin" />
+                                            <span>Submitting...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Send size={16} />
+                                            <span>Submit Complaint</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </form>
@@ -482,24 +688,75 @@ export default function ConsumerComplaintsPage() {
                     <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-semibold text-gray-800">Complaint Details</h3>
-                            <button onClick={() => setSelectedComplaint(null)} className="p-1 hover:bg-gray-100 rounded-lg"><X size={20} className="text-gray-500" /></button>
+                            <button onClick={() => setSelectedComplaint(null)} className="p-1 hover:bg-gray-100 rounded-lg">
+                                <X size={20} className="text-gray-500" />
+                            </button>
                         </div>
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
-                                <div><p className="text-xs text-gray-500">Complaint ID</p><p className="text-sm font-medium">{selectedComplaint.complaintId}</p></div>
-                                <div><p className="text-xs text-gray-500">Status</p><span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(selectedComplaint.status).color}`}>{getStatusBadge(selectedComplaint.status).label}</span></div>
-                                <div><p className="text-xs text-gray-500">Category</p><p className="text-sm font-medium">{selectedComplaint.category}</p></div>
-                                <div><p className="text-xs text-gray-500">Priority</p><span className={`px-2 py-1 text-xs font-medium rounded-full ${getPriorityBadge(selectedComplaint.priority).color}`}>{getPriorityBadge(selectedComplaint.priority).label}</span></div>
-                                <div><p className="text-xs text-gray-500">Meter</p><p className="text-sm font-medium">{selectedComplaint.meterNo}</p></div>
-                                <div><p className="text-xs text-gray-500">Feeder</p><p className="text-sm font-medium">{selectedComplaint.feederName}</p></div>
-                                <div><p className="text-xs text-gray-500">Transformer</p><p className="text-sm font-medium">{selectedComplaint.transformerNo}</p></div>
-                                <div><p className="text-xs text-gray-500">Assigned To</p><p className="text-sm font-medium">{selectedComplaint.assignedTo || 'Not Assigned'}</p></div>
-                                <div><p className="text-xs text-gray-500">Created</p><p className="text-sm font-medium">{new Date(selectedComplaint.createdAt).toLocaleString()}</p></div>
-                                {selectedComplaint.resolvedAt && (<div><p className="text-xs text-gray-500">Resolved</p><p className="text-sm font-medium text-green-600">{new Date(selectedComplaint.resolvedAt).toLocaleString()}</p></div>)}
+                                <div>
+                                    <p className="text-xs text-gray-500">Complaint ID</p>
+                                    <p className="text-sm font-medium">{selectedComplaint.complaintId}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500">Status</p>
+                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(selectedComplaint.status).color}`}>
+                                        {getStatusBadge(selectedComplaint.status).label}
+                                    </span>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500">Category</p>
+                                    <p className="text-sm font-medium">{selectedComplaint.category}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500">Priority</p>
+                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPriorityBadge(selectedComplaint.priority).color}`}>
+                                        {getPriorityBadge(selectedComplaint.priority).label}
+                                    </span>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500">Meter</p>
+                                    <p className="text-sm font-medium">{selectedComplaint.meterNo}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500">Feeder</p>
+                                    <p className="text-sm font-medium">{selectedComplaint.feederName}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500">Transformer</p>
+                                    <p className="text-sm font-medium">{selectedComplaint.transformerNo || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500">Assigned To</p>
+                                    <p className="text-sm font-medium">{selectedComplaint.assignedTo || 'Not Assigned'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500">Created</p>
+                                    <p className="text-sm font-medium">{new Date(selectedComplaint.createdAt).toLocaleString()}</p>
+                                </div>
+                                {selectedComplaint.resolvedAt && (
+                                    <div>
+                                        <p className="text-xs text-gray-500">Resolved</p>
+                                        <p className="text-sm font-medium text-green-600">{new Date(selectedComplaint.resolvedAt).toLocaleString()}</p>
+                                    </div>
+                                )}
                             </div>
-                            <div className="border-t pt-4"><p className="text-xs text-gray-500">Subject</p><p className="text-sm font-medium">{selectedComplaint.subject}</p></div>
-                            <div><p className="text-xs text-gray-500">Description</p><p className="text-sm text-gray-600">{selectedComplaint.description}</p></div>
-                            <div className="flex justify-end"><button onClick={() => setSelectedComplaint(null)} className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">Close</button></div>
+                            <div className="border-t pt-4">
+                                <p className="text-xs text-gray-500">Subject</p>
+                                <p className="text-sm font-medium">{selectedComplaint.subject}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Description</p>
+                                <p className="text-sm text-gray-600">{selectedComplaint.description}</p>
+                            </div>
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={() => setSelectedComplaint(null)}
+                                    className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                    Close
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

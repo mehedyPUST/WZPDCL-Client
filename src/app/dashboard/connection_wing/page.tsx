@@ -34,6 +34,13 @@ import {
     Filter,
     Activity,
     Plus,
+    AlertCircle,
+    Hash,
+    Factory,
+    Info,
+    Save,
+    Shield,
+    ClipboardCheck,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -54,7 +61,7 @@ interface ConnectionApplication {
     poleNumber: string;
     nearestLandmark: string;
     consumerId: string;
-    status: 'pending_payment' | 'payment_done' | 'under_xen_review' | 'forwarded_to_wing' | 'team_sent' | 'in_progress' | 'connection_completed' | 'implemented' | 'rejected';
+    status: 'pending_payment' | 'payment_done' | 'under_xen_review' | 'forwarded_to_wing' | 'team_sent' | 'connection_completed' | 'implemented' | 'rejected';
     paymentStatus: 'pending' | 'paid';
     feeAmount: number;
     assignedMeterNo: string | null;
@@ -65,42 +72,41 @@ interface ConnectionApplication {
     updatedAt: string;
 }
 
-interface StatCardProps {
-    title: string;
-    value: string | number;
-    icon: React.ReactNode;
-    bgColor: string;
-    change?: string;
-    trend?: 'up' | 'down' | 'neutral';
+interface MeterFormData {
+    meterNo: string;
+    meterSerialNo: string;
+    meterType: 'single_phase' | 'three_phase';
+    manufacturer: string;
+    feederName: string;
+    connectionDate: string;
+    consumerType: 'residential' | 'commercial' | 'industrial';
+    initialReading: string;
+    specialNote: string;
+    consumerName: string;
+    address: string;
+    mobile: string;
+    email: string;
 }
 
-const StatCard = ({ title, value, icon, bgColor, change, trend }: StatCardProps) => (
-    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
-        <div className="flex items-center justify-between">
-            <div>
-                <p className="text-sm text-gray-500 font-medium">{title}</p>
-                <p className="text-2xl font-bold text-gray-800 mt-1">{value}</p>
-                {change && (
-                    <p className={`text-xs flex items-center mt-1 ${trend === 'up' ? 'text-green-600' :
-                        trend === 'down' ? 'text-red-600' :
-                            'text-gray-500'
-                        }`}>
-                        {trend === 'up' && <TrendingUp size={14} className="mr-1" />}
-                        {trend === 'down' && <TrendingDown size={14} className="mr-1" />}
-                        {change}
-                    </p>
-                )}
-            </div>
-            <div className={`p-3 rounded-xl ${bgColor}`}>
-                {icon}
-            </div>
-        </div>
-    </div>
-);
+interface MeterCheckResult {
+    exists: boolean;
+    isAvailable: boolean;
+    message: string;
+    consumerName?: string;
+    claimedBy?: string;
+    status?: string;
+    meterType?: string;
+    manufacturer?: string;
+    feederName?: string;
+}
+
+const FEEDER_OPTIONS = ['Trimohoni', 'Circuit-Hose', 'DC-Court', 'N.S-Road'];
+const MANUFACTURER_OPTIONS = ['ABB', 'Siemens', 'Schneider Electric', 'GE', 'L&T', 'WEG', 'C&S Electric', 'Other'];
 
 export default function ConnectionWingDashboardPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [applications, setApplications] = useState<ConnectionApplication[]>([]);
     const [selectedApp, setSelectedApp] = useState<ConnectionApplication | null>(null);
     const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -113,17 +119,36 @@ export default function ConnectionWingDashboardPage() {
         total: 0,
         pendingXen: 0,
         forwardedToWing: 0,
-        inProgress: 0,
-        completed: 0,
+        teamSent: 0,
+        connectionCompleted: 0,
+        implemented: 0,
+        rejected: 0,
     });
     const [user, setUser] = useState<any>(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
-    // Meter assignment form
-    const [meterForm, setMeterForm] = useState({
+    // ✅ Complete meter assignment form
+    const [meterForm, setMeterForm] = useState<MeterFormData>({
         meterNo: '',
+        meterSerialNo: '',
+        meterType: 'single_phase',
+        manufacturer: '',
+        feederName: '',
+        connectionDate: '',
+        consumerType: 'residential',
         initialReading: '',
-        connectionWingRemarks: '',
+        specialNote: '',
+        consumerName: '',
+        address: '',
+        mobile: '',
+        email: '',
     });
+    const [meterErrors, setMeterErrors] = useState<{ [key: string]: string }>({});
+
+    // ✅ Meter check states
+    const [isCheckingMeter, setIsCheckingMeter] = useState(false);
+    const [meterCheckResult, setMeterCheckResult] = useState<MeterCheckResult | null>(null);
+    const [meterChecked, setMeterChecked] = useState(false);
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
     const ITEMS_PER_PAGE = 5;
@@ -148,206 +173,91 @@ export default function ConnectionWingDashboardPage() {
 
     const fetchApplications = async () => {
         setLoading(true);
+        setError(null);
         try {
             const token = localStorage.getItem('auth_token');
+
+            console.log('📡 Fetching applications from API...');
+
             const response = await fetch(
                 `${API_URL}/api/connection-wing/applications`,
                 {
                     headers: {
                         'Authorization': token ? `Bearer ${token}` : '',
+                        'Content-Type': 'application/json',
                     },
                 }
             );
 
-            const data = await response.json();
+            console.log('📡 Response status:', response.status);
 
             if (!response.ok) {
-                throw new Error(data.message || 'Failed to fetch applications');
+                const errorData = await response.json();
+                console.error('❌ API Error:', errorData);
+                throw new Error(errorData.message || 'Failed to fetch applications');
             }
 
+            const data = await response.json();
+            console.log('📦 API Response:', data);
+
             const apps = data.data || [];
+            console.log(`📦 Found ${apps.length} applications`);
+
             setApplications(apps);
+            updateStats(apps);
+            setError(null);
 
-            // Update stats
-            const total = apps.length;
-            const forwardedToWing = apps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
-            const teamSent = apps.filter((a: ConnectionApplication) => a.status === 'team_sent').length;
-            const inProgress = apps.filter((a: ConnectionApplication) => a.status === 'in_progress').length;
-            const completed = apps.filter((a: ConnectionApplication) => a.status === 'connection_completed' || a.status === 'implemented').length;
-
+        } catch (error: any) {
+            console.error('❌ Error fetching applications:', error);
+            setError(error.message || 'Failed to load applications');
+            setApplications([]);
             setStats({
-                total,
+                total: 0,
                 pendingXen: 0,
-                forwardedToWing: forwardedToWing + teamSent,
-                inProgress,
-                completed,
-            });
-
-        } catch (error) {
-            console.error('Error fetching applications:', error);
-            // Mock data
-            const mockApps = getMockApplications();
-            setApplications(mockApps);
-            const total = mockApps.length;
-            const forwardedToWing = mockApps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
-            const teamSent = mockApps.filter((a: ConnectionApplication) => a.status === 'team_sent').length;
-            const inProgress = mockApps.filter((a: ConnectionApplication) => a.status === 'in_progress').length;
-            const completed = mockApps.filter((a: ConnectionApplication) => a.status === 'connection_completed' || a.status === 'implemented').length;
-
-            setStats({
-                total,
-                pendingXen: 0,
-                forwardedToWing: forwardedToWing + teamSent,
-                inProgress,
-                completed,
+                forwardedToWing: 0,
+                teamSent: 0,
+                connectionCompleted: 0,
+                implemented: 0,
+                rejected: 0,
             });
         } finally {
             setLoading(false);
         }
     };
 
-    const getMockApplications = (): ConnectionApplication[] => {
-        return [
-            {
-                applicationId: 'APP-2026-8835',
-                applicantName: 'Md. Kamal Hossain',
-                email: 'kamal@example.com',
-                mobile: '01712345678',
-                nidNo: '12345678901234567',
-                address: 'House #12, Road #5, Trimohoni, Kushtia',
-                connectionType: 'residential',
-                loadRequired: 5,
-                voltageLevel: '220',
-                purpose: 'New house construction',
-                feederName: 'Trimohoni',
-                transformerNo: 'TR-01',
-                poleNumber: 'P-123',
-                nearestLandmark: 'Near Trimohoni Bazar',
-                consumerId: 'user123',
-                status: 'forwarded_to_wing',
-                paymentStatus: 'paid',
-                feeAmount: 5000,
-                assignedMeterNo: null,
-                implementedAt: null,
-                xenRemarks: 'Approved. Send to connection wing.',
-                connectionWingRemarks: null,
-                createdAt: '2026-07-10T10:00:00Z',
-                updatedAt: '2026-07-10T10:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8836',
-                applicantName: 'Ms. Fatema Begum',
-                email: 'fatema@example.com',
-                mobile: '01712345679',
-                nidNo: '12345678901234568',
-                address: 'House #5, Circuit-Hose, Kushtia',
-                connectionType: 'commercial',
-                loadRequired: 15,
-                voltageLevel: '380',
-                purpose: 'New retail shop',
-                feederName: 'Circuit-Hose',
-                transformerNo: 'TR-03',
-                poleNumber: 'P-456',
-                nearestLandmark: 'Near Circuit-Hose School',
-                consumerId: 'user124',
-                status: 'team_sent',
-                paymentStatus: 'paid',
-                feeAmount: 10000,
-                assignedMeterNo: null,
-                implementedAt: null,
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: 'Team assigned for implementation.',
-                createdAt: '2026-07-09T14:30:00Z',
-                updatedAt: '2026-07-10T08:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8837',
-                applicantName: 'Md. Rahim Uddin',
-                email: 'rahim@example.com',
-                mobile: '01712345680',
-                nidNo: '12345678901234569',
-                address: 'Plot #10, DC-Court, Kushtia',
-                connectionType: 'industrial',
-                loadRequired: 30,
-                voltageLevel: '11000',
-                purpose: 'Small factory',
-                feederName: 'DC-Court',
-                transformerNo: 'TR-02',
-                poleNumber: 'P-789',
-                nearestLandmark: 'Opposite DC-Court',
-                consumerId: 'user125',
-                status: 'in_progress',
-                paymentStatus: 'paid',
-                feeAmount: 15000,
-                assignedMeterNo: null,
-                implementedAt: null,
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: 'Installation in progress.',
-                createdAt: '2026-07-08T09:15:00Z',
-                updatedAt: '2026-07-10T09:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8838',
-                applicantName: 'Ms. Nasrin Akter',
-                email: 'nasrin@example.com',
-                mobile: '01712345681',
-                nidNo: '12345678901234570',
-                address: 'House #20, N.S-Road, Kushtia',
-                connectionType: 'residential',
-                loadRequired: 3,
-                voltageLevel: '220',
-                purpose: 'New apartment',
-                feederName: 'N.S-Road',
-                transformerNo: 'TR-05',
-                poleNumber: 'P-321',
-                nearestLandmark: 'Near N.S-Road Market',
-                consumerId: 'user126',
-                status: 'connection_completed',
-                paymentStatus: 'paid',
-                feeAmount: 5000,
-                assignedMeterNo: 'MTR-2026-011',
-                implementedAt: '2026-07-10T08:00:00Z',
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: 'Connection completed successfully.',
-                createdAt: '2026-07-05T16:45:00Z',
-                updatedAt: '2026-07-10T08:00:00Z',
-            },
-            {
-                applicationId: 'APP-2026-8839',
-                applicantName: 'Md. Shafiqul Islam',
-                email: 'shafiq@example.com',
-                mobile: '01712345682',
-                nidNo: '12345678901234571',
-                address: 'House #8, Trimohoni, Kushtia',
-                connectionType: 'commercial',
-                loadRequired: 10,
-                voltageLevel: '380',
-                purpose: 'Restaurant',
-                feederName: 'Trimohoni',
-                transformerNo: 'TR-01',
-                poleNumber: 'P-654',
-                nearestLandmark: 'Near Trimohoni Bridge',
-                consumerId: 'user127',
-                status: 'forwarded_to_wing',
-                paymentStatus: 'paid',
-                feeAmount: 10000,
-                assignedMeterNo: null,
-                implementedAt: null,
-                xenRemarks: 'Approved.',
-                connectionWingRemarks: null,
-                createdAt: '2026-07-07T11:30:00Z',
-                updatedAt: '2026-07-08T09:00:00Z',
-            },
-        ];
+    const updateStats = (apps: ConnectionApplication[]) => {
+        const total = apps.length;
+        const forwardedToWing = apps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
+        const teamSent = apps.filter((a: ConnectionApplication) => a.status === 'team_sent').length;
+        const connectionCompleted = apps.filter((a: ConnectionApplication) => a.status === 'connection_completed').length;
+        const implemented = apps.filter((a: ConnectionApplication) => a.status === 'implemented').length;
+        const rejected = apps.filter((a: ConnectionApplication) => a.status === 'rejected').length;
+        const pendingXen = apps.filter((a: ConnectionApplication) =>
+            a.status === 'pending_payment' ||
+            a.status === 'payment_done' ||
+            a.status === 'under_xen_review'
+        ).length;
+
+        setStats({
+            total,
+            pendingXen,
+            forwardedToWing,
+            teamSent,
+            connectionCompleted,
+            implemented,
+            rejected,
+        });
     };
 
     const getStatusBadge = (status: string) => {
         const statuses: Record<string, { color: string; label: string; icon: any }> = {
-            forwarded_to_wing: { color: 'bg-blue-100 text-blue-700', label: 'New Assignment', icon: Clock },
+            pending_payment: { color: 'bg-yellow-100 text-yellow-700', label: 'Pending Payment', icon: Clock },
+            payment_done: { color: 'bg-blue-100 text-blue-700', label: 'Payment Done', icon: CheckCircle },
+            under_xen_review: { color: 'bg-indigo-100 text-indigo-700', label: 'Under XEN Review', icon: Loader2 },
+            forwarded_to_wing: { color: 'bg-blue-100 text-blue-700', label: 'Forwarded to Wing', icon: ArrowRight },
             team_sent: { color: 'bg-purple-100 text-purple-700', label: 'Team Sent', icon: Send },
-            in_progress: { color: 'bg-yellow-100 text-yellow-700', label: 'In Progress', icon: Loader2 },
-            connection_completed: { color: 'bg-orange-100 text-orange-700', label: 'Completed - Pending Meter', icon: CheckCircle },
-            implemented: { color: 'bg-green-100 text-green-700', label: 'Implemented', icon: CheckCircle },
+            connection_completed: { color: 'bg-orange-100 text-orange-700', label: 'Connection Completed', icon: CheckCircle },
+            implemented: { color: 'bg-green-100 text-green-700', label: '✅ Implemented', icon: CheckCircle },
             rejected: { color: 'bg-red-100 text-red-700', label: 'Rejected', icon: XCircle },
         };
         return statuses[status] || statuses.forwarded_to_wing;
@@ -363,9 +273,17 @@ export default function ConnectionWingDashboardPage() {
     };
 
     const updateStatus = async (app: ConnectionApplication, newStatus: string) => {
+        if (!app || !app.applicationId) {
+            alert('Invalid application');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             const token = localStorage.getItem('auth_token');
+
+            console.log(`🔍 Updating application ${app.applicationId} to ${newStatus}`);
+
             const response = await fetch(
                 `${API_URL}/api/connection-wing/applications/${app.applicationId}/status`,
                 {
@@ -382,45 +300,162 @@ export default function ConnectionWingDashboardPage() {
             );
 
             const data = await response.json();
+            console.log('📦 Response:', data);
 
             if (!response.ok) {
                 throw new Error(data.message || 'Failed to update status');
             }
 
+            console.log(`✅ Application ${app.applicationId} updated to ${newStatus}`);
             await fetchApplications();
-        } catch (error) {
-            console.error('Update status error:', error);
-            alert('Failed to update status. Please try again.');
+
+            setShowDetailsModal(false);
+            setSelectedApp(null);
+
+        } catch (error: any) {
+            console.error('❌ Update status error:', error);
+            alert(error.message || 'Failed to update status. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
+    // ✅ Open assign meter modal with pre-filled data
     const openAssignMeterModal = (app: ConnectionApplication) => {
         setSelectedApp(app);
         setMeterForm({
             meterNo: '',
-            initialReading: '',
-            connectionWingRemarks: '',
+            meterSerialNo: '',
+            meterType: 'single_phase',
+            manufacturer: '',
+            feederName: app.feederName || '',
+            connectionDate: new Date().toISOString().split('T')[0],
+            consumerType: app.connectionType || 'residential',
+            initialReading: '0',
+            specialNote: `Assigned for application: ${app.applicationId}`,
+            consumerName: app.applicantName || '',
+            address: app.address || '',
+            mobile: app.mobile || '',
+            email: app.email || '',
         });
+        setMeterErrors({});
+        setMeterCheckResult(null);
+        setMeterChecked(false);
         setShowAssignMeterModal(true);
     };
 
+    // ✅ Check meter availability
+    const checkMeterAvailability = async () => {
+        const meterNo = meterForm.meterNo.trim();
+
+        if (!meterNo) {
+            setMeterErrors(prev => ({ ...prev, meterNo: 'Please enter a meter number to check' }));
+            return;
+        }
+
+        setIsCheckingMeter(true);
+        setMeterCheckResult(null);
+
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(
+                `${API_URL}/api/meters/check-availability/${encodeURIComponent(meterNo)}`,
+                {
+                    headers: {
+                        'Authorization': token ? `Bearer ${token}` : '',
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to check meter availability');
+            }
+
+            setMeterCheckResult(data.data);
+            setMeterChecked(true);
+
+            if (data.data.exists) {
+                setMeterErrors(prev => ({
+                    ...prev,
+                    meterNo: data.data.message || 'This meter number already exists in the system'
+                }));
+
+                // Pre-fill existing meter info
+                if (data.data.meterType) {
+                    setMeterForm(prev => ({
+                        ...prev,
+                        meterType: data.data.meterType || prev.meterType,
+                        manufacturer: data.data.manufacturer || prev.manufacturer,
+                        feederName: data.data.feederName || prev.feederName,
+                        consumerName: data.data.consumerName || prev.consumerName,
+                    }));
+                }
+            } else {
+                setMeterErrors(prev => ({ ...prev, meterNo: '' }));
+            }
+
+        } catch (error: any) {
+            console.error('Check meter error:', error);
+            setMeterErrors(prev => ({ ...prev, meterNo: error.message || 'Failed to check meter' }));
+        } finally {
+            setIsCheckingMeter(false);
+        }
+    };
+
+    // ✅ Submit assign meter with all fields
     const submitAssignMeter = async () => {
         if (!selectedApp) return;
 
-        if (!meterForm.meterNo) {
-            alert('Please enter a meter number');
-            return;
+        const errors: { [key: string]: string } = {};
+
+        // Validate all required fields
+        if (!meterForm.meterNo.trim()) {
+            errors.meterNo = 'Meter number is required';
+        } else if (meterCheckResult?.exists) {
+            errors.meterNo = 'This meter number already exists';
         }
-        if (!meterForm.initialReading) {
-            alert('Please enter initial meter reading');
+
+        if (!meterForm.meterSerialNo.trim()) {
+            errors.meterSerialNo = 'Meter serial number is required';
+        }
+
+        if (!meterForm.meterType) {
+            errors.meterType = 'Please select meter type';
+        }
+
+        if (!meterForm.manufacturer) {
+            errors.manufacturer = 'Please select manufacturer';
+        }
+
+        if (!meterForm.feederName) {
+            errors.feederName = 'Please select a feeder';
+        }
+
+        if (!meterForm.connectionDate) {
+            errors.connectionDate = 'Connection date is required';
+        }
+
+        if (meterForm.initialReading && (isNaN(Number(meterForm.initialReading)) || Number(meterForm.initialReading) < 0)) {
+            errors.initialReading = 'Please enter a valid reading';
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setMeterErrors(errors);
             return;
         }
 
         setIsSubmitting(true);
+        setMeterErrors({});
+
         try {
             const token = localStorage.getItem('auth_token');
+
+            console.log(`🔍 Assigning meter to application: ${selectedApp.applicationId}`);
+            console.log(`📦 Meter No: ${meterForm.meterNo}, Serial: ${meterForm.meterSerialNo}`);
+
             const response = await fetch(
                 `${API_URL}/api/connection-wing/applications/${selectedApp.applicationId}/assign-meter`,
                 {
@@ -430,38 +465,65 @@ export default function ConnectionWingDashboardPage() {
                         'Authorization': token ? `Bearer ${token}` : '',
                     },
                     body: JSON.stringify({
-                        meterNo: meterForm.meterNo,
-                        initialReading: Number(meterForm.initialReading),
-                        connectionWingRemarks: meterForm.connectionWingRemarks || 'Meter assigned',
+                        meterNo: meterForm.meterNo.trim(),
+                        meterSerialNo: meterForm.meterSerialNo.trim(),
+                        meterType: meterForm.meterType,
+                        manufacturer: meterForm.manufacturer,
+                        feederName: meterForm.feederName,
+                        connectionDate: meterForm.connectionDate,
+                        consumerType: meterForm.consumerType,
+                        initialReading: Number(meterForm.initialReading) || 0,
+                        specialNote: meterForm.specialNote || '',
+                        consumerName: meterForm.consumerName || selectedApp.applicantName,
+                        address: meterForm.address || selectedApp.address,
+                        mobile: meterForm.mobile || selectedApp.mobile,
+                        email: meterForm.email || selectedApp.email,
+                        connectionWingRemarks: meterForm.specialNote || 'Meter assigned successfully',
                     }),
                 }
             );
 
             const data = await response.json();
+            console.log('📦 Response:', data);
 
             if (!response.ok) {
                 throw new Error(data.message || 'Failed to assign meter');
             }
 
+            console.log(`✅ Meter ${meterForm.meterNo} assigned to ${selectedApp.applicationId}`);
+
             setShowAssignMeterModal(false);
             setSelectedApp(null);
             await fetchApplications();
 
-        } catch (error) {
-            console.error('Assign meter error:', error);
-            alert('Failed to assign meter. Please try again.');
+            alert(`✅ Meter ${meterForm.meterNo} assigned successfully!`);
+
+        } catch (error: any) {
+            console.error('❌ Assign meter error:', error);
+            setMeterErrors({ submit: error.message || 'Failed to assign meter. Please try again.' });
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const getStatusActions = (app: ConnectionApplication) => {
+        // ✅ Check if waiting for XEN
+        if (['pending_payment', 'payment_done', 'under_xen_review'].includes(app.status)) {
+            return (
+                <div className="flex items-center space-x-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
+                    <Clock size={14} className="text-amber-600 animate-pulse" />
+                    <span className="text-xs text-amber-700 font-medium">Awaiting XEN</span>
+                </div>
+            );
+        }
+
         switch (app.status) {
             case 'forwarded_to_wing':
                 return (
                     <button
                         onClick={() => updateStatus(app, 'team_sent')}
-                        className="px-3 py-1 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-1"
+                        disabled={isSubmitting}
+                        className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-1 disabled:opacity-50"
                     >
                         <Send size={14} />
                         <span>Send Team</span>
@@ -470,18 +532,9 @@ export default function ConnectionWingDashboardPage() {
             case 'team_sent':
                 return (
                     <button
-                        onClick={() => updateStatus(app, 'in_progress')}
-                        className="px-3 py-1 bg-yellow-600 text-white text-xs rounded-lg hover:bg-yellow-700 transition-colors flex items-center space-x-1"
-                    >
-                        <Activity size={14} />
-                        <span>Start Work</span>
-                    </button>
-                );
-            case 'in_progress':
-                return (
-                    <button
                         onClick={() => updateStatus(app, 'connection_completed')}
-                        className="px-3 py-1 bg-orange-600 text-white text-xs rounded-lg hover:bg-orange-700 transition-colors flex items-center space-x-1"
+                        disabled={isSubmitting}
+                        className="px-3 py-1.5 bg-orange-600 text-white text-xs rounded-lg hover:bg-orange-700 transition-colors flex items-center space-x-1 disabled:opacity-50"
                     >
                         <CheckCircle size={14} />
                         <span>Complete</span>
@@ -491,11 +544,25 @@ export default function ConnectionWingDashboardPage() {
                 return (
                     <button
                         onClick={() => openAssignMeterModal(app)}
-                        className="px-3 py-1 bg-emerald-600 text-white text-xs rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-1"
+                        className="px-3 py-1.5 bg-emerald-600 text-white text-xs rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-1"
                     >
                         <Plus size={14} />
                         <span>Assign Meter</span>
                     </button>
+                );
+            case 'implemented':
+                return (
+                    <span className="text-xs text-green-600 font-medium flex items-center space-x-1 bg-green-50 px-2 py-1 rounded-full">
+                        <CheckCircle size={14} />
+                        <span>Implemented</span>
+                    </span>
+                );
+            case 'rejected':
+                return (
+                    <span className="text-xs text-red-600 font-medium flex items-center space-x-1 bg-red-50 px-2 py-1 rounded-full">
+                        <XCircle size={14} />
+                        <span>Rejected</span>
+                    </span>
                 );
             default:
                 return null;
@@ -503,9 +570,9 @@ export default function ConnectionWingDashboardPage() {
     };
 
     const filteredApplications = applications.filter(app => {
-        const matchesSearch = app.applicationId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            app.applicantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            app.mobile.includes(searchTerm);
+        const matchesSearch = app.applicationId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            app.applicantName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            app.mobile?.includes(searchTerm);
         const matchesStatus = filterStatus === 'all' || app.status === filterStatus;
         return matchesSearch && matchesStatus;
     });
@@ -516,17 +583,26 @@ export default function ConnectionWingDashboardPage() {
         currentPage * ITEMS_PER_PAGE
     );
 
-    const statCards = [
-        { title: 'Total Applications', value: stats.total, icon: FileText, bgColor: 'bg-blue-100', change: '', trend: 'neutral' as const },
-        { title: 'Awaiting Action', value: stats.forwardedToWing, icon: Clock, bgColor: 'bg-yellow-100', change: `${stats.forwardedToWing} pending`, trend: 'down' as const },
-        { title: 'In Progress', value: stats.inProgress, icon: Activity, bgColor: 'bg-purple-100', change: `${stats.inProgress} ongoing`, trend: 'neutral' as const },
-        { title: 'Completed', value: stats.completed, icon: CheckCircle, bgColor: 'bg-green-100', change: `${stats.completed} done`, trend: 'up' as const },
-    ];
-
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
                 <Loader2 size={40} className="animate-spin text-emerald-600" />
+            </div>
+        );
+    }
+
+    if (error && applications.length === 0) {
+        return (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
+                <AlertCircle size={48} className="text-red-500 mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-red-700">Failed to Load Applications</h3>
+                <p className="text-red-600 mt-2">{error}</p>
+                <button
+                    onClick={fetchApplications}
+                    className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                    Try Again
+                </button>
             </div>
         );
     }
@@ -540,37 +616,85 @@ export default function ConnectionWingDashboardPage() {
                         <Zap size={24} className="text-emerald-600" />
                         <span>Connection Wing Dashboard</span>
                     </h1>
-                    <p className="text-gray-500 text-sm">Manage and implement new connections</p>
+                    <p className="text-gray-500 text-sm">
+                        {applications.length} applications in the system
+                    </p>
                 </div>
                 <div className="flex items-center space-x-3">
                     <button
-                        onClick={fetchApplications}
-                        className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                        onClick={() => {
+                            setIsRefreshing(true);
+                            fetchApplications().finally(() => setIsRefreshing(false));
+                        }}
+                        disabled={isRefreshing}
+                        className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 disabled:opacity-50"
                     >
-                        <RefreshCw size={16} />
-                        <span>Refresh</span>
+                        <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+                        <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+                    </button>
+                    <button
+                        onClick={() => router.push('/dashboard/connection_wing/add-meter')}
+                        className="px-4 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 transition-colors flex items-center space-x-2"
+                    >
+                        <Plus size={16} />
+                        <span>Add Meter</span>
+                    </button>
+                    <button
+                        onClick={() => router.push('/dashboard/connection_wing/add-consumer')}
+                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                    >
+                        <User size={16} />
+                        <span>Add Consumer</span>
                     </button>
                 </div>
             </div>
 
             {/* Stats */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {statCards.map((stat, index) => {
-                    const Icon = stat.icon;
-                    return (
-                        <div key={index} className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm text-gray-500">{stat.title}</p>
-                                    <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
-                                </div>
-                                <div className={`p-3 rounded-xl ${stat.bgColor}`}>
-                                    <Icon size={20} />
-                                </div>
-                            </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500">Total</p>
+                            <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
                         </div>
-                    );
-                })}
+                        <div className="p-3 rounded-xl bg-blue-100">
+                            <FileText size={20} className="text-blue-600" />
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500">Awaiting XEN</p>
+                            <p className="text-2xl font-bold text-amber-600">{stats.pendingXen}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-amber-100">
+                            <Clock size={20} className="text-amber-600" />
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500">In Progress</p>
+                            <p className="text-2xl font-bold text-purple-600">{stats.forwardedToWing + stats.teamSent}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-purple-100">
+                            <Activity size={20} className="text-purple-600" />
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500">Completed</p>
+                            <p className="text-2xl font-bold text-green-600">{stats.connectionCompleted + stats.implemented}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-green-100">
+                            <CheckCircle size={20} className="text-green-600" />
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Search and Filters */}
@@ -582,27 +706,37 @@ export default function ConnectionWingDashboardPage() {
                             type="text"
                             placeholder="Search by application ID, name, or mobile..."
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                     </div>
                     <div className="flex flex-wrap gap-3">
                         <select
                             value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
+                            onChange={(e) => {
+                                setFilterStatus(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             className="px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                         >
                             <option value="all">All Status</option>
-                            <option value="forwarded_to_wing">New Assignment</option>
+                            <option value="pending_payment">Pending Payment</option>
+                            <option value="payment_done">Payment Done</option>
+                            <option value="under_xen_review">Under XEN Review</option>
+                            <option value="forwarded_to_wing">Forwarded to Wing</option>
                             <option value="team_sent">Team Sent</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="connection_completed">Pending Meter</option>
+                            <option value="connection_completed">Connection Completed</option>
                             <option value="implemented">Implemented</option>
+                            <option value="rejected">Rejected</option>
                         </select>
                         <button
                             onClick={() => {
                                 setSearchTerm('');
                                 setFilterStatus('all');
+                                setCurrentPage(1);
                             }}
                             className="px-4 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
                         >
@@ -610,6 +744,9 @@ export default function ConnectionWingDashboardPage() {
                             <span>Reset</span>
                         </button>
                     </div>
+                </div>
+                <div className="mt-2 text-xs text-gray-400">
+                    Found {filteredApplications.length} applications
                 </div>
             </div>
 
@@ -630,7 +767,9 @@ export default function ConnectionWingDashboardPage() {
                             {paginatedApps.length === 0 ? (
                                 <tr>
                                     <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                                        No applications found.
+                                        {searchTerm || filterStatus !== 'all'
+                                            ? 'No applications match your filters.'
+                                            : 'No applications found in the system.'}
                                     </td>
                                 </tr>
                             ) : (
@@ -681,7 +820,7 @@ export default function ConnectionWingDashboardPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+                    <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-4">
                         <p className="text-sm text-gray-500">
                             Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredApplications.length)} of {filteredApplications.length} applications
                         </p>
@@ -693,18 +832,41 @@ export default function ConnectionWingDashboardPage() {
                             >
                                 <ChevronLeft size={16} />
                             </button>
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                                let pageNum;
+                                if (totalPages <= 5) {
+                                    pageNum = i + 1;
+                                } else if (currentPage <= 3) {
+                                    pageNum = i + 1;
+                                } else if (currentPage >= totalPages - 2) {
+                                    pageNum = totalPages - 4 + i;
+                                } else {
+                                    pageNum = currentPage - 2 + i;
+                                }
+                                return (
+                                    <button
+                                        key={pageNum}
+                                        onClick={() => setCurrentPage(pageNum)}
+                                        className={`px-3 py-1 rounded-lg text-sm transition-colors ${currentPage === pageNum
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'border border-gray-200 hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        {pageNum}
+                                    </button>
+                                );
+                            })}
+                            {totalPages > 5 && currentPage < totalPages - 2 && (
+                                <span className="text-gray-400">...</span>
+                            )}
+                            {totalPages > 5 && currentPage < totalPages - 2 && (
                                 <button
-                                    key={page}
-                                    onClick={() => setCurrentPage(page)}
-                                    className={`px-3 py-1 rounded-lg text-sm transition-colors ${currentPage === page
-                                        ? 'bg-emerald-600 text-white'
-                                        : 'border border-gray-200 hover:bg-gray-50'
-                                        }`}
+                                    onClick={() => setCurrentPage(totalPages)}
+                                    className={`px-3 py-1 rounded-lg text-sm transition-colors border border-gray-200 hover:bg-gray-50`}
                                 >
-                                    {page}
+                                    {totalPages}
                                 </button>
-                            ))}
+                            )}
                             <button
                                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                 disabled={currentPage === totalPages}
@@ -761,86 +923,338 @@ export default function ConnectionWingDashboardPage() {
                 </div>
             )}
 
-            {/* Assign Meter Modal */}
+            {/* ✅ Updated Assign Meter Modal with all fields */}
             {showAssignMeterModal && selectedApp && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+                    <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-gray-800">Assign Meter</h3>
-                            <button onClick={() => setShowAssignMeterModal(false)} className="p-1 hover:bg-gray-100 rounded-lg">
+                            <div className="flex items-center space-x-3">
+                                <div className="p-2 bg-emerald-100 rounded-full">
+                                    <Plus size={20} className="text-emerald-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-800">Assign Meter</h3>
+                                    <p className="text-sm text-gray-500">Add meter details for {selectedApp.applicationId}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowAssignMeterModal(false)}
+                                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
                                 <X size={20} className="text-gray-500" />
                             </button>
                         </div>
 
-                        <div className="space-y-4">
+                        {/* Application Info */}
+                        <div className="bg-gray-50 rounded-lg p-4 mb-6 grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                    Meter Number <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={meterForm.meterNo}
-                                    onChange={(e) => setMeterForm(prev => ({ ...prev, meterNo: e.target.value }))}
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                    placeholder="e.g., MTR-2026-012"
-                                    required
-                                />
+                                <p className="text-xs text-gray-500">Application ID</p>
+                                <p className="text-sm font-medium text-gray-800">{selectedApp.applicationId}</p>
                             </div>
-
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                    Initial Reading (kWh) <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="number"
-                                    value={meterForm.initialReading}
-                                    onChange={(e) => setMeterForm(prev => ({ ...prev, initialReading: e.target.value }))}
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                    placeholder="Enter initial meter reading"
-                                    step="0.01"
-                                    required
-                                />
+                                <p className="text-xs text-gray-500">Applicant</p>
+                                <p className="text-sm font-medium text-gray-800">{selectedApp.applicantName}</p>
                             </div>
-
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                    Remarks (Optional)
-                                </label>
-                                <textarea
-                                    value={meterForm.connectionWingRemarks}
-                                    onChange={(e) => setMeterForm(prev => ({ ...prev, connectionWingRemarks: e.target.value }))}
-                                    rows={2}
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                    placeholder="Any additional notes"
-                                />
+                                <p className="text-xs text-gray-500">Connection Type</p>
+                                <p className="text-sm font-medium text-gray-800">{getConnectionTypeLabel(selectedApp.connectionType)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Load Required</p>
+                                <p className="text-sm font-medium text-gray-800">{selectedApp.loadRequired} kW</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Feeder</p>
+                                <p className="text-sm font-medium text-gray-800">{selectedApp.feederName}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500">Address</p>
+                                <p className="text-sm font-medium text-gray-800 truncate">{selectedApp.address}</p>
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-end space-x-3 pt-4 mt-4 border-t border-gray-100">
-                            <button
-                                onClick={() => setShowAssignMeterModal(false)}
-                                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={submitAssignMeter}
-                                disabled={isSubmitting}
-                                className={`px-4 py-2 bg-emerald-600 text-white rounded-lg transition-colors flex items-center space-x-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-emerald-700'
-                                    }`}
-                            >
-                                {isSubmitting ? (
-                                    <>
-                                        <Loader2 size={16} className="animate-spin" />
-                                        <span>Assigning...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <CheckCircle size={16} />
-                                        <span>Assign Meter</span>
-                                    </>
+                        {meterErrors.submit && (
+                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center space-x-2">
+                                <AlertCircle size={16} />
+                                <span>{meterErrors.submit}</span>
+                            </div>
+                        )}
+
+                        {/* Meter Form */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Meter Number with Check */}
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Meter Number <span className="text-red-500">*</span>
+                                </label>
+                                <div className="flex gap-3">
+                                    <div className="relative flex-1">
+                                        <Hash size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            value={meterForm.meterNo}
+                                            onChange={(e) => {
+                                                setMeterForm(prev => ({ ...prev, meterNo: e.target.value }));
+                                                setMeterChecked(false);
+                                                setMeterCheckResult(null);
+                                            }}
+                                            className={`w-full pl-10 pr-12 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${meterErrors.meterNo ? 'border-red-500 bg-red-50' :
+                                                meterCheckResult?.exists ? 'border-red-500 bg-red-50' :
+                                                    meterCheckResult?.isAvailable ? 'border-green-500 bg-green-50' :
+                                                        'border-gray-200'
+                                                }`}
+                                            placeholder="e.g., MTR-2026-016"
+                                            disabled={isCheckingMeter}
+                                        />
+                                        {isCheckingMeter && (
+                                            <Loader2 size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                                        )}
+                                        {!isCheckingMeter && meterCheckResult?.isAvailable && (
+                                            <CheckCircle size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500" />
+                                        )}
+                                        {!isCheckingMeter && meterCheckResult?.exists && (
+                                            <X size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500" />
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={checkMeterAvailability}
+                                        disabled={isCheckingMeter || !meterForm.meterNo.trim()}
+                                        className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all flex items-center space-x-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm hover:shadow-md"
+                                    >
+                                        {isCheckingMeter ? (
+                                            <>
+                                                <Loader2 size={18} className="animate-spin" />
+                                                <span>Checking...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Search size={18} />
+                                                <span>Check</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                                {meterErrors.meterNo && (
+                                    <p className="text-red-500 text-sm mt-1">{meterErrors.meterNo}</p>
                                 )}
-                            </button>
+                                {meterCheckResult?.isAvailable && (
+                                    <p className="text-emerald-600 text-sm mt-1 flex items-center space-x-1">
+                                        <Check size={14} />
+                                        <span>✅ Meter is available</span>
+                                    </p>
+                                )}
+                                <p className="text-xs text-gray-400 mt-1 flex items-center space-x-1">
+                                    <Info size={12} />
+                                    <span>Click "Check" to verify if this meter number is available</span>
+                                </p>
+                            </div>
+
+                            {/* Meter Serial Number */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Meter Serial No <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Hash size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={meterForm.meterSerialNo}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, meterSerialNo: e.target.value }))}
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${meterErrors.meterSerialNo ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                            }`}
+                                        placeholder="e.g., SN-2026-001"
+                                    />
+                                </div>
+                                {meterErrors.meterSerialNo && (
+                                    <p className="text-red-500 text-sm mt-1">{meterErrors.meterSerialNo}</p>
+                                )}
+                            </div>
+
+                            {/* Meter Type */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Meter Type <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Zap size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <select
+                                        value={meterForm.meterType}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, meterType: e.target.value as any }))}
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white transition-all ${meterErrors.meterType ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                            }`}
+                                    >
+                                        <option value="single_phase">Single Phase</option>
+                                        <option value="three_phase">Three Phase</option>
+                                    </select>
+                                </div>
+                                {meterErrors.meterType && <p className="text-red-500 text-sm mt-1">{meterErrors.meterType}</p>}
+                            </div>
+
+                            {/* Manufacturer */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Manufacturer <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Factory size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <select
+                                        value={meterForm.manufacturer}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, manufacturer: e.target.value }))}
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white transition-all ${meterErrors.manufacturer ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                            }`}
+                                    >
+                                        <option value="">Select Manufacturer</option>
+                                        {MANUFACTURER_OPTIONS.map((manufacturer) => (
+                                            <option key={manufacturer} value={manufacturer}>{manufacturer}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {meterErrors.manufacturer && <p className="text-red-500 text-sm mt-1">{meterErrors.manufacturer}</p>}
+                            </div>
+
+                            {/* Feeder Name */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Feeder Name <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <MapPin size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <select
+                                        value={meterForm.feederName}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, feederName: e.target.value }))}
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white transition-all ${meterErrors.feederName ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                            }`}
+                                    >
+                                        <option value="">Select Feeder</option>
+                                        {FEEDER_OPTIONS.map((feeder) => (
+                                            <option key={feeder} value={feeder}>{feeder}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {meterErrors.feederName && <p className="text-red-500 text-sm mt-1">{meterErrors.feederName}</p>}
+                            </div>
+
+                            {/* Connection Date */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Connection Date <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Calendar size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="date"
+                                        value={meterForm.connectionDate}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, connectionDate: e.target.value }))}
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${meterErrors.connectionDate ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                            }`}
+                                    />
+                                </div>
+                                {meterErrors.connectionDate && <p className="text-red-500 text-sm mt-1">{meterErrors.connectionDate}</p>}
+                            </div>
+
+                            {/* Consumer Type */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Consumer Type
+                                </label>
+                                <div className="relative">
+                                    <Building size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <select
+                                        value={meterForm.consumerType}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, consumerType: e.target.value as any }))}
+                                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white transition-all"
+                                    >
+                                        <option value="residential">Residential</option>
+                                        <option value="commercial">Commercial</option>
+                                        <option value="industrial">Industrial</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Initial Reading */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Initial Reading (kWh)
+                                </label>
+                                <div className="relative">
+                                    <Zap size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="number"
+                                        value={meterForm.initialReading}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, initialReading: e.target.value }))}
+                                        step="0.01"
+                                        min="0"
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${meterErrors.initialReading ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                            }`}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                                {meterErrors.initialReading && <p className="text-red-500 text-sm mt-1">{meterErrors.initialReading}</p>}
+                            </div>
+
+                            {/* Special Note */}
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                    Special Note
+                                </label>
+                                <div className="relative">
+                                    <FileText size={18} className="absolute left-3 top-3 text-gray-400" />
+                                    <textarea
+                                        value={meterForm.specialNote}
+                                        onChange={(e) => setMeterForm(prev => ({ ...prev, specialNote: e.target.value }))}
+                                        rows={2}
+                                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                                        placeholder="Any special notes about this meter..."
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center justify-between pt-6 mt-4 border-t border-gray-100">
+                            <div className="flex items-center space-x-2">
+                                {meterCheckResult?.isAvailable && (
+                                    <span className="text-emerald-600 flex items-center space-x-1 text-sm font-medium">
+                                        <CheckCircle size={16} />
+                                        <span>✅ Meter is available</span>
+                                    </span>
+                                )}
+                                {meterForm.meterNo && !meterChecked && (
+                                    <span className="text-amber-600 flex items-center space-x-1 text-sm font-medium">
+                                        <AlertCircle size={16} />
+                                        <span>Please check meter availability</span>
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center space-x-3">
+                                <button
+                                    onClick={() => setShowAssignMeterModal(false)}
+                                    className="px-6 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-medium"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={submitAssignMeter}
+                                    disabled={isSubmitting || !meterCheckResult?.isAvailable}
+                                    className={`px-8 py-3 bg-emerald-600 text-white rounded-xl font-medium flex items-center space-x-2 transition-all shadow-sm hover:shadow-md ${isSubmitting || !meterCheckResult?.isAvailable
+                                        ? 'opacity-50 cursor-not-allowed'
+                                        : 'hover:bg-emerald-700'
+                                        }`}
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <Loader2 size={20} className="animate-spin" />
+                                            <span>Assigning...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save size={20} />
+                                            <span>Assign Meter</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

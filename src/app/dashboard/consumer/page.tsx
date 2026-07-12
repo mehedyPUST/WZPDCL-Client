@@ -74,6 +74,7 @@ interface RecentActivity {
 export default function ConsumerDashboardPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [user, setUser] = useState<any>(null);
     const [stats, setStats] = useState({
         currentBill: '0',
@@ -91,20 +92,29 @@ export default function ConsumerDashboardPage() {
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
+                setLoading(true);
+                setError(null);
+
                 // Get user session
-                const { data, error } = await authClient.getSession();
-                if (error || !data) {
+                const { data, error: sessionError } = await authClient.getSession();
+                if (sessionError || !data) {
                     router.push('/login');
                     return;
                 }
                 setUser(data.user);
 
-                // Fetch real data from API
                 const token = localStorage.getItem('auth_token');
                 const userId = data.user?.id;
 
+                if (!userId) {
+                    setError('User ID not found');
+                    setLoading(false);
+                    return;
+                }
+
                 // ✅ Fetch user's meters
                 let meters = [];
+                let meterError = null;
                 try {
                     const meterRes = await fetch(
                         `${API_URL}/api/user/meters/${userId}`,
@@ -119,16 +129,22 @@ export default function ConsumerDashboardPage() {
                         const meterData = await meterRes.json();
                         if (meterData.success) {
                             meters = meterData.data.meters || [];
+                        } else {
+                            meterError = meterData.message || 'Failed to fetch meters';
                         }
+                    } else {
+                        meterError = `HTTP ${meterRes.status}: Failed to fetch meters`;
                     }
                 } catch (error) {
                     console.error('Error fetching meters:', error);
+                    meterError = error instanceof Error ? error.message : 'Network error';
                 }
 
                 const meterNo = data.user?.meterNo || (meters.length > 0 ? meters[0]?.meterNo : null);
 
                 // ✅ Fetch bills
                 let billsData = [];
+                let billError = null;
                 if (meterNo) {
                     try {
                         const billsRes = await fetch(
@@ -141,19 +157,21 @@ export default function ConsumerDashboardPage() {
                         );
                         if (billsRes.ok) {
                             const billsResult = await billsRes.json();
-                            billsData = billsResult.data || [];
+                            if (billsResult.success) {
+                                billsData = billsResult.data || [];
+                            } else {
+                                billError = billsResult.message || 'Failed to fetch bills';
+                            }
+                        } else {
+                            billError = `HTTP ${billsRes.status}: Failed to fetch bills`;
                         }
                     } catch (error) {
                         console.error('Error fetching bills:', error);
+                        billError = error instanceof Error ? error.message : 'Network error';
                     }
                 }
 
-                // ✅ If no bills, use mock data
-                if (billsData.length === 0) {
-                    billsData = getMockBills();
-                }
-
-                // ✅ Calculate stats
+                // ✅ Calculate stats from real data
                 const unpaidBills = billsData.filter((b: any) => b.status === 'unpaid' || b.status === 'pending');
                 const currentUnpaid = unpaidBills.length > 0 ? unpaidBills[0] : null;
                 const paidBills = billsData.filter((b: any) => b.status === 'paid');
@@ -161,6 +179,7 @@ export default function ConsumerDashboardPage() {
 
                 // ✅ Fetch complaints count
                 let complaintsCount = 0;
+                let complaintError = null;
                 try {
                     const complaintsRes = await fetch(
                         `${API_URL}/api/complaints/consumer/${userId}`,
@@ -172,10 +191,17 @@ export default function ConsumerDashboardPage() {
                     );
                     if (complaintsRes.ok) {
                         const complaintsResult = await complaintsRes.json();
-                        complaintsCount = complaintsResult.data?.length || 0;
+                        if (complaintsResult.success) {
+                            complaintsCount = complaintsResult.data?.length || 0;
+                        } else {
+                            complaintError = complaintsResult.message || 'Failed to fetch complaints';
+                        }
+                    } else {
+                        complaintError = `HTTP ${complaintsRes.status}: Failed to fetch complaints`;
                     }
                 } catch (error) {
                     console.error('Error fetching complaints:', error);
+                    complaintError = error instanceof Error ? error.message : 'Network error';
                 }
 
                 setStats({
@@ -188,56 +214,55 @@ export default function ConsumerDashboardPage() {
                     metersCount: meters.length,
                 });
 
-                // ✅ Set recent activities
-                const activities: RecentActivity[] = [
-                    ...billsData.slice(0, 3).map((b: any) => ({
+                // ✅ Set recent activities from real data
+                const activities: RecentActivity[] = [];
+
+                // Add bill activities
+                billsData.slice(0, 3).forEach((b: any) => {
+                    activities.push({
                         id: b.billId || `bill-${Date.now()}`,
                         type: b.status === 'paid' ? 'payment' : 'bill',
                         message: b.status === 'paid'
                             ? `Bill ${b.billId || 'N/A'} paid for ${b.billingMonth || ''}`
                             : `Bill ${b.billId || 'N/A'} generated for ${b.billingMonth || ''}`,
-                        time: new Date(b.createdAt || Date.now()).toLocaleDateString(),
+                        time: b.paidAt ? new Date(b.paidAt).toLocaleDateString() :
+                            b.createdAt ? new Date(b.createdAt).toLocaleDateString() :
+                                new Date().toLocaleDateString(),
                         status: b.status === 'paid' ? 'completed' : 'pending',
-                    })),
-                ];
+                    });
+                });
 
-                // ✅ Add meter claimed activity if any
-                if (meters.length > 0) {
+                // Add meter claimed activity
+                if (meters.length > 0 && meters[0]?.claimedAt) {
                     activities.unshift({
                         id: `meter-${Date.now()}`,
                         type: 'connection',
                         message: `Meter ${meters[0]?.meterNo || ''} claimed successfully`,
-                        time: new Date().toLocaleDateString(),
+                        time: new Date(meters[0].claimedAt).toLocaleDateString(),
                         status: 'completed',
                     });
                 }
 
-                setRecentActivities(activities.slice(0, 5));
-
-            } catch (error) {
-                console.error('Error fetching dashboard data:', error);
-                // Use mock data on error
-                const mockBills = getMockBills();
-                const unpaid = mockBills.filter((b: any) => b.status === 'unpaid');
-                const current = unpaid.length > 0 ? unpaid[0] : null;
-                const paid = mockBills.filter((b: any) => b.status === 'paid');
-                const totalPaid = paid.reduce((sum: number, b: any) => sum + b.totalAmount, 0);
-
-                setStats({
-                    currentBill: current ? `৳${current.totalAmount.toLocaleString()}` : '৳0',
-                    dueDate: current?.dueDate || 'No due bill',
-                    complaints: 2,
-                    meterStatus: 'Active',
-                    totalBills: mockBills.length,
-                    totalPaid: totalPaid,
-                    metersCount: 1,
+                // Sort by time (newest first)
+                activities.sort((a, b) => {
+                    const dateA = new Date(a.time);
+                    const dateB = new Date(b.time);
+                    return dateB.getTime() - dateA.getTime();
                 });
 
-                setRecentActivities([
-                    { id: '1', type: 'bill', message: 'Bill B-2026-002 generated for May 2026', time: '2026-07-10', status: 'pending' },
-                    { id: '2', type: 'payment', message: 'Bill B-2026-001 paid successfully', time: '2026-07-05', status: 'completed' },
-                    { id: '3', type: 'complaint', message: 'Complaint #CMP-001 resolved', time: '2026-07-03', status: 'completed' },
-                ]);
+                setRecentActivities(activities.slice(0, 5));
+
+                // ✅ Set error if any
+                if (meterError || billError || complaintError) {
+                    const errors = [meterError, billError, complaintError].filter(Boolean);
+                    if (errors.length > 0) {
+                        setError(errors.join('; '));
+                    }
+                }
+
+            } catch (error: any) {
+                console.error('Error fetching dashboard data:', error);
+                setError(error.message || 'Failed to load dashboard data');
             } finally {
                 setLoading(false);
             }
@@ -245,36 +270,6 @@ export default function ConsumerDashboardPage() {
 
         fetchDashboardData();
     }, [router, API_URL]);
-
-    // Mock bills for demo
-    const getMockBills = () => {
-        return [
-            {
-                billId: 'B-2026-001',
-                billingMonth: 'June 2026',
-                totalAmount: 2587.50,
-                dueDate: '2026-07-15',
-                status: 'unpaid',
-                createdAt: '2026-07-01',
-            },
-            {
-                billId: 'B-2026-002',
-                billingMonth: 'May 2026',
-                totalAmount: 1987.50,
-                dueDate: '2026-06-15',
-                status: 'paid',
-                createdAt: '2026-06-01',
-            },
-            {
-                billId: 'B-2026-003',
-                billingMonth: 'April 2026',
-                totalAmount: 1950.00,
-                dueDate: '2026-05-15',
-                status: 'paid',
-                createdAt: '2026-05-01',
-            },
-        ];
-    };
 
     const getActivityIcon = (type: string) => {
         switch (type) {
@@ -299,6 +294,22 @@ export default function ConsumerDashboardPage() {
         return (
             <div className="flex items-center justify-center h-64">
                 <Loader2 size={40} className="animate-spin text-emerald-600" />
+            </div>
+        );
+    }
+
+    if (error && !user) {
+        return (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
+                <AlertCircle size={48} className="text-red-500 mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-red-700">Failed to Load Dashboard</h3>
+                <p className="text-red-600 mt-2">{error}</p>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                    Try Again
+                </button>
             </div>
         );
     }
@@ -412,8 +423,16 @@ export default function ConsumerDashboardPage() {
                             <span className="text-sm font-medium">{user?.email || 'N/A'}</span>
                         </div>
                         <div className="flex items-center justify-between py-2 border-b border-gray-50">
+                            <span className="text-sm text-gray-600">Mobile</span>
+                            <span className="text-sm font-medium">{user?.mobile || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-2 border-b border-gray-50">
                             <span className="text-sm text-gray-600">Meter Number</span>
                             <span className="text-sm font-medium text-emerald-600">{user?.meterNo || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-2 border-b border-gray-50">
+                            <span className="text-sm text-gray-600">Total Meters</span>
+                            <span className="text-sm font-medium">{stats.metersCount}</span>
                         </div>
                         <div className="flex items-center justify-between py-2 border-b border-gray-50">
                             <span className="text-sm text-gray-600">Total Bills</span>
@@ -467,6 +486,20 @@ export default function ConsumerDashboardPage() {
                             </div>
                         ))}
                     </div>
+                </div>
+            )}
+
+            {/* Error Warning (if any partial errors) */}
+            {error && user && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-center space-x-3">
+                    <AlertCircle size={18} className="text-yellow-600" />
+                    <p className="text-sm text-yellow-700">{error}</p>
+                    <button
+                        onClick={() => setError(null)}
+                        className="ml-auto text-yellow-500 hover:text-yellow-700"
+                    >
+                        <RefreshCw size={16} />
+                    </button>
                 </div>
             )}
         </div>

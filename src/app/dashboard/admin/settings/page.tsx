@@ -385,14 +385,14 @@ export default function AdminSettingsPage() {
                         <button
                             onClick={() => handleNotificationToggle(notif.key, !notificationSettings[notif.key as keyof typeof notificationSettings])}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${notificationSettings[notif.key as keyof typeof notificationSettings]
-                                    ? 'bg-emerald-600'
-                                    : 'bg-gray-300'
+                                ? 'bg-emerald-600'
+                                : 'bg-gray-300'
                                 }`}
                         >
                             <span
                                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notificationSettings[notif.key as keyof typeof notificationSettings]
-                                        ? 'translate-x-6'
-                                        : 'translate-x-1'
+                                    ? 'translate-x-6'
+                                    : 'translate-x-1'
                                     }`}
                             />
                         </button>
@@ -507,8 +507,8 @@ export default function AdminSettingsPage() {
                                 key={theme.value}
                                 onClick={() => handleAppearanceChange('theme', theme.value)}
                                 className={`p-4 rounded-lg border-2 transition-all ${appearanceSettings.theme === theme.value
-                                        ? 'border-emerald-500 bg-emerald-50'
-                                        : 'border-gray-200 hover:border-gray-300'
+                                    ? 'border-emerald-500 bg-emerald-50'
+                                    : 'border-gray-200 hover:border-gray-300'
                                     }`}
                             >
                                 <Icon size={24} className={`mx-auto ${appearanceSettings.theme === theme.value ? 'text-emerald-600' : 'text-gray-500'
@@ -528,8 +528,8 @@ export default function AdminSettingsPage() {
                             key={color}
                             onClick={() => handleAppearanceChange('primaryColor', color)}
                             className={`w-10 h-10 rounded-full border-2 transition-all ${appearanceSettings.primaryColor === color
-                                    ? 'border-gray-800 ring-2 ring-offset-2 ring-gray-800'
-                                    : 'border-transparent'
+                                ? 'border-gray-800 ring-2 ring-offset-2 ring-gray-800'
+                                : 'border-transparent'
                                 }`}
                             style={{ backgroundColor: color }}
                         />
@@ -584,8 +584,8 @@ export default function AdminSettingsPage() {
                                 key={size.value}
                                 onClick={() => handleAppearanceChange('fontSize', size.value)}
                                 className={`p-3 rounded-lg border-2 transition-all ${appearanceSettings.fontSize === size.value
-                                        ? 'border-emerald-500 bg-emerald-50'
-                                        : 'border-gray-200 hover:border-gray-300'
+                                    ? 'border-emerald-500 bg-emerald-50'
+                                    : 'border-gray-200 hover:border-gray-300'
                                     }`}
                             >
                                 <span className={`${size.value === 'small' ? 'text-sm' : size.value === 'large' ? 'text-lg' : 'text-base'
@@ -679,8 +679,8 @@ export default function AdminSettingsPage() {
                                 key={section.id}
                                 onClick={() => setActiveTab(section.id)}
                                 className={`flex items-center space-x-2 px-6 py-4 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeTab === section.id
-                                        ? 'border-emerald-600 text-emerald-600'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    ? 'border-emerald-600 text-emerald-600'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                     }`}
                             >
                                 {section.icon}

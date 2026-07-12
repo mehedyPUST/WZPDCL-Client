@@ -21,6 +21,7 @@ import {
     MapPin,
     Zap,
     Calendar,
+    AlertCircle,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -55,6 +56,11 @@ export default function RegisterPage() {
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
 
+    // ✅ Real-time validation states
+    const [checkingField, setCheckingField] = useState<string | null>(null);
+    const [fieldValid, setFieldValid] = useState<{ [key: string]: boolean | null }>({});
+    const [fieldError, setFieldError] = useState<{ [key: string]: string | null }>({});
+
     // Meter search states
     const [searchMeterNo, setSearchMeterNo] = useState('');
     const [meterSearching, setMeterSearching] = useState(false);
@@ -77,11 +83,67 @@ export default function RegisterPage() {
 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+    // ✅ Check field uniqueness (Email, Mobile, NID)
+    const checkFieldUniqueness = async (field: string, value: string) => {
+        if (!value.trim()) {
+            setFieldValid(prev => ({ ...prev, [field]: null }));
+            setFieldError(prev => ({ ...prev, [field]: null }));
+            return;
+        }
+
+        setCheckingField(field);
+        setFieldValid(prev => ({ ...prev, [field]: null }));
+
+        try {
+            const response = await fetch(
+                `${API_URL}/api/consumers/check-unique?field=${field}&value=${encodeURIComponent(value.trim())}`,
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            const data = await response.json();
+
+            if (data.success && data.data) {
+                setFieldValid(prev => ({ ...prev, [field]: !data.data.exists }));
+                if (data.data.exists) {
+                    setFieldError(prev => ({ ...prev, [field]: data.data.message }));
+                    setErrors(prev => ({ ...prev, [field]: data.data.message }));
+                } else {
+                    setFieldError(prev => ({ ...prev, [field]: null }));
+                    setErrors(prev => ({ ...prev, [field]: '' }));
+                }
+            }
+        } catch (error: any) {
+            console.error(`Check ${field} error:`, error);
+            setFieldValid(prev => ({ ...prev, [field]: false }));
+        } finally {
+            setCheckingField(null);
+        }
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+
         if (errors[name]) {
             setErrors(prev => ({ ...prev, [name]: '' }));
+        }
+
+        // ✅ Real-time validation for unique fields
+        if (name === 'email' || name === 'mobile' || name === 'nidNo') {
+            if (value.trim().length >= (name === 'nidNo' ? 5 : 3)) {
+                // Debounce
+                clearTimeout((window as any).validationTimeout);
+                (window as any).validationTimeout = setTimeout(() => {
+                    checkFieldUniqueness(name, value);
+                }, 500);
+            } else {
+                setFieldValid(prev => ({ ...prev, [name]: null }));
+                setFieldError(prev => ({ ...prev, [name]: null }));
+            }
         }
     };
 
@@ -162,7 +224,6 @@ export default function RegisterPage() {
         if (!meterSearchResult) return;
 
         try {
-            // Store claimed meter in localStorage to associate after registration
             setClaimedMeterNo(meterSearchResult.meterNo);
             localStorage.setItem('claimedMeter', meterSearchResult.meterNo);
             localStorage.setItem('claimedMeterData', JSON.stringify(meterSearchResult));
@@ -188,15 +249,39 @@ export default function RegisterPage() {
 
     const validateForm = (): boolean => {
         const newErrors: { [key: string]: string } = {};
+
         if (!formData.name.trim()) newErrors.name = 'Full name is required';
-        if (!formData.email.trim()) newErrors.email = 'Email is required';
-        else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Invalid email format';
-        if (!formData.mobile.trim()) newErrors.mobile = 'Mobile number is required';
-        else if (!/^01[3-9]\d{8}$/.test(formData.mobile)) newErrors.mobile = 'Invalid Bangladeshi mobile number';
-        if (!formData.nidNo.trim()) newErrors.nidNo = 'NID number is required';
-        else if (!/^\d{10,17}$/.test(formData.nidNo)) newErrors.nidNo = 'Invalid NID number (10-17 digits)';
-        if (!formData.password) newErrors.password = 'Password is required';
-        else if (formData.password.length < 8) newErrors.password = 'Password must be at least 8 characters';
+
+        if (!formData.email.trim()) {
+            newErrors.email = 'Email is required';
+        } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+            newErrors.email = 'Invalid email format';
+        } else if (fieldValid.email === false) {
+            newErrors.email = fieldError.email || 'Email already exists';
+        }
+
+        if (!formData.mobile.trim()) {
+            newErrors.mobile = 'Mobile number is required';
+        } else if (!/^01[3-9]\d{8}$/.test(formData.mobile)) {
+            newErrors.mobile = 'Invalid Bangladeshi mobile number';
+        } else if (fieldValid.mobile === false) {
+            newErrors.mobile = fieldError.mobile || 'Mobile number already exists';
+        }
+
+        if (!formData.nidNo.trim()) {
+            newErrors.nidNo = 'NID number is required';
+        } else if (!/^\d{10,17}$/.test(formData.nidNo)) {
+            newErrors.nidNo = 'Invalid NID number (10-17 digits)';
+        } else if (fieldValid.nidNo === false) {
+            newErrors.nidNo = fieldError.nidNo || 'NID number already exists';
+        }
+
+        if (!formData.password) {
+            newErrors.password = 'Password is required';
+        } else if (formData.password.length < 8) {
+            newErrors.password = 'Password must be at least 8 characters';
+        }
+
         if (formData.password !== formData.confirmPassword) {
             newErrors.confirmPassword = 'Passwords do not match';
         }
@@ -218,7 +303,6 @@ export default function RegisterPage() {
                 imageUrl = await uploadImageToImgBB(imageFile);
             }
 
-            // Get claimed meter from localStorage
             const claimedMeter = localStorage.getItem('claimedMeter');
             const claimedMeterData = localStorage.getItem('claimedMeterData');
             let meterData = null;
@@ -239,7 +323,6 @@ export default function RegisterPage() {
                 profileImage: imageUrl,
                 role: 'consumer',
                 isActive: true,
-                // If meter is claimed, include meter details
                 meterNo: claimedMeter || '',
                 feederName: meterData?.feederName || '',
                 consumerType: meterData?.consumerType || 'residential',
@@ -263,7 +346,6 @@ export default function RegisterPage() {
                 throw new Error(data.message || data.error?.message || 'Registration failed');
             }
 
-            // If meter was claimed, update the meter with the new user ID
             if (claimedMeter && data.data?.user?.id) {
                 try {
                     await fetch(`${API_URL}/api/meters/claim`, {
@@ -281,7 +363,6 @@ export default function RegisterPage() {
                     });
                 } catch (claimError) {
                     console.error('Meter claim error:', claimError);
-                    // Continue even if claim fails - user is registered
                 }
             }
 
@@ -402,7 +483,7 @@ export default function RegisterPage() {
                         {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
                     </div>
 
-                    {/* Email */}
+                    {/* Email with Real-time Validation */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                             Email <span className="text-red-500">*</span>
@@ -414,15 +495,35 @@ export default function RegisterPage() {
                                 name="email"
                                 value={formData.email}
                                 onChange={handleChange}
-                                className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.email ? 'border-red-500' : 'border-gray-200'
+                                className={`w-full pl-10 pr-10 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.email ? 'border-red-500' :
+                                        fieldValid.email === true ? 'border-green-500 bg-green-50' :
+                                            fieldValid.email === false ? 'border-red-500 bg-red-50' :
+                                                'border-gray-200'
                                     }`}
                                 placeholder="you@example.com"
                             />
+                            {checkingField === 'email' && (
+                                <Loader2 size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                            )}
+                            {!checkingField && fieldValid.email === true && formData.email && (
+                                <CheckCircle size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500" />
+                            )}
+                            {!checkingField && fieldValid.email === false && formData.email && (
+                                <X size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500" />
+                            )}
                         </div>
-                        {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
+                        {!checkingField && fieldValid.email === true && formData.email && (
+                            <p className="text-green-600 text-xs mt-1 flex items-center space-x-1">
+                                <CheckCircle size={12} />
+                                <span>✓ Email is available</span>
+                            </p>
+                        )}
+                        {errors.email && fieldValid.email !== false && (
+                            <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+                        )}
                     </div>
 
-                    {/* Mobile */}
+                    {/* Mobile with Real-time Validation */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                             Mobile Number <span className="text-red-500">*</span>
@@ -434,15 +535,35 @@ export default function RegisterPage() {
                                 name="mobile"
                                 value={formData.mobile}
                                 onChange={handleChange}
-                                className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.mobile ? 'border-red-500' : 'border-gray-200'
+                                className={`w-full pl-10 pr-10 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.mobile ? 'border-red-500' :
+                                        fieldValid.mobile === true ? 'border-green-500 bg-green-50' :
+                                            fieldValid.mobile === false ? 'border-red-500 bg-red-50' :
+                                                'border-gray-200'
                                     }`}
                                 placeholder="017XX-XXXXXX"
                             />
+                            {checkingField === 'mobile' && (
+                                <Loader2 size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                            )}
+                            {!checkingField && fieldValid.mobile === true && formData.mobile && (
+                                <CheckCircle size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500" />
+                            )}
+                            {!checkingField && fieldValid.mobile === false && formData.mobile && (
+                                <X size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500" />
+                            )}
                         </div>
-                        {errors.mobile && <p className="text-red-500 text-xs mt-1">{errors.mobile}</p>}
+                        {!checkingField && fieldValid.mobile === true && formData.mobile && (
+                            <p className="text-green-600 text-xs mt-1 flex items-center space-x-1">
+                                <CheckCircle size={12} />
+                                <span>✓ Mobile is available</span>
+                            </p>
+                        )}
+                        {errors.mobile && fieldValid.mobile !== false && (
+                            <p className="text-red-500 text-xs mt-1">{errors.mobile}</p>
+                        )}
                     </div>
 
-                    {/* NID No */}
+                    {/* NID with Real-time Validation */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                             NID Number <span className="text-red-500">*</span>
@@ -454,12 +575,32 @@ export default function RegisterPage() {
                                 name="nidNo"
                                 value={formData.nidNo}
                                 onChange={handleChange}
-                                className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.nidNo ? 'border-red-500' : 'border-gray-200'
+                                className={`w-full pl-10 pr-10 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.nidNo ? 'border-red-500' :
+                                        fieldValid.nidNo === true ? 'border-green-500 bg-green-50' :
+                                            fieldValid.nidNo === false ? 'border-red-500 bg-red-50' :
+                                                'border-gray-200'
                                     }`}
                                 placeholder="12345678901234567"
                             />
+                            {checkingField === 'nidNo' && (
+                                <Loader2 size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                            )}
+                            {!checkingField && fieldValid.nidNo === true && formData.nidNo && (
+                                <CheckCircle size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500" />
+                            )}
+                            {!checkingField && fieldValid.nidNo === false && formData.nidNo && (
+                                <X size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500" />
+                            )}
                         </div>
-                        {errors.nidNo && <p className="text-red-500 text-xs mt-1">{errors.nidNo}</p>}
+                        {!checkingField && fieldValid.nidNo === true && formData.nidNo && (
+                            <p className="text-green-600 text-xs mt-1 flex items-center space-x-1">
+                                <CheckCircle size={12} />
+                                <span>✓ NID is available</span>
+                            </p>
+                        )}
+                        {errors.nidNo && fieldValid.nidNo !== false && (
+                            <p className="text-red-500 text-xs mt-1">{errors.nidNo}</p>
+                        )}
                     </div>
 
                     {/* ✅ Meter Claim Section */}
@@ -550,7 +691,7 @@ export default function RegisterPage() {
                         {/* Meter Error */}
                         {meterError && (
                             <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
-                                <X size={18} className="text-red-500" />
+                                <AlertCircle size={18} className="text-red-500" />
                                 <p className="text-sm text-red-600">{meterError}</p>
                             </div>
                         )}
@@ -617,10 +758,10 @@ export default function RegisterPage() {
                     {/* Submit Button */}
                     <button
                         type="submit"
-                        disabled={loading || uploading}
-                        className={`w-full py-2.5 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors ${loading || uploading
-                            ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        disabled={loading || uploading || Object.values(fieldValid).some(v => v === false)}
+                        className={`w-full py-2.5 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors ${loading || uploading || Object.values(fieldValid).some(v => v === false)
+                                ? 'bg-gray-400 cursor-not-allowed'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                             }`}
                     >
                         {loading ? (

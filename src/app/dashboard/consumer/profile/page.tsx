@@ -30,6 +30,7 @@ import {
     Globe,
     Eye,
     EyeOff,
+    Package,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -42,11 +43,13 @@ interface ProfileData {
     userType: 'existing_consumer' | 'applicant_new_connection';
     feederName: string;
     meterNo: string;
+    meters: string[];
     role: string;
     address: string;
     profileImage: string;
     isActive: boolean;
     createdAt: string;
+    updatedAt: string;
 }
 
 export default function ConsumerProfilePage() {
@@ -67,11 +70,13 @@ export default function ConsumerProfilePage() {
         userType: 'existing_consumer',
         feederName: '',
         meterNo: '',
+        meters: [],
         role: 'consumer',
         address: '',
         profileImage: '',
         isActive: true,
         createdAt: '',
+        updatedAt: '',
     });
 
     const [passwordData, setPasswordData] = useState({
@@ -89,14 +94,43 @@ export default function ConsumerProfilePage() {
     useEffect(() => {
         const fetchProfile = async () => {
             setLoading(true);
+            setError(null);
             try {
-                const { data, error } = await authClient.getSession();
-                if (error || !data) {
+                const { data, error: sessionError } = await authClient.getSession();
+                if (sessionError || !data) {
                     router.push('/login');
                     return;
                 }
 
                 const user = data.user;
+
+                // ✅ Fetch user details including meters
+                let meters: string[] = [];
+                let claimedMeters: any[] = [];
+
+                try {
+                    const token = localStorage.getItem('auth_token');
+                    const response = await fetch(
+                        `${API_URL}/api/user/meters/${user.id}`,
+                        {
+                            headers: {
+                                'Authorization': token ? `Bearer ${token}` : '',
+                                'Content-Type': 'application/json',
+                            },
+                        }
+                    );
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        if (result.success && result.data) {
+                            meters = result.data.meters?.map((m: any) => m.meterNo) || [];
+                            claimedMeters = result.data.claimedMeters || [];
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching meters:', error);
+                }
+
                 setProfile({
                     id: user.id || '',
                     name: user.name || '',
@@ -106,26 +140,29 @@ export default function ConsumerProfilePage() {
                     userType: user.userType || 'existing_consumer',
                     feederName: user.feederName || '',
                     meterNo: user.meterNo || '',
+                    meters: meters,
                     role: user.role || 'consumer',
                     address: user.address || '',
                     profileImage: user.profileImage || '',
                     isActive: user.isActive !== undefined ? user.isActive : true,
                     createdAt: user.createdAt || new Date().toISOString(),
+                    updatedAt: user.updatedAt || new Date().toISOString(),
                 });
-            } catch (error) {
+            } catch (error: any) {
                 console.error('Error fetching profile:', error);
-                setError('Failed to load profile');
+                setError(error.message || 'Failed to load profile');
             } finally {
                 setLoading(false);
             }
         };
 
         fetchProfile();
-    }, [router]);
+    }, [router, API_URL]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setProfile(prev => ({ ...prev, [name]: value }));
+        if (error) setError(null);
     };
 
     const handleSave = async () => {
@@ -134,14 +171,35 @@ export default function ConsumerProfilePage() {
         setError(null);
 
         try {
-            // Update profile via Better Auth
-            // Note: Better Auth may not support direct profile updates via client
-            // This is a mock for now - you'll need to implement a custom API endpoint
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            const token = localStorage.getItem('auth_token');
+
+            // ✅ Update user profile via Better Auth
+            const response = await fetch(`${API_URL}/api/auth/update-user`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : '',
+                },
+                body: JSON.stringify({
+                    name: profile.name,
+                    email: profile.email,
+                    mobile: profile.mobile,
+                    nidNo: profile.nidNo,
+                    address: profile.address,
+                    userType: profile.userType,
+                    feederName: profile.feederName,
+                }),
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.message || 'Failed to update profile');
+            }
 
             setIsEditing(false);
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 3000);
+
         } catch (error: any) {
             console.error('Save error:', error);
             setError(error.message || 'Failed to save profile');
@@ -181,19 +239,39 @@ export default function ConsumerProfilePage() {
         if (!validatePassword()) return;
 
         setIsSaving(true);
+        setError(null);
+
         try {
-            // Implement password change via Better Auth
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            const token = localStorage.getItem('auth_token');
+
+            // ✅ Change password via Better Auth
+            const response = await fetch(`${API_URL}/api/auth/change-password`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : '',
+                },
+                body: JSON.stringify({
+                    currentPassword: passwordData.currentPassword,
+                    newPassword: passwordData.newPassword,
+                }),
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.message || 'Failed to change password');
+            }
 
             setShowPasswordModal(false);
             setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 3000);
-        } catch (error) {
+
+        } catch (error: any) {
             console.error('Password change error:', error);
             setPasswordErrors(prev => ({
                 ...prev,
-                currentPassword: 'Failed to change password',
+                currentPassword: error.message || 'Failed to change password',
             }));
         } finally {
             setIsSaving(false);
@@ -298,6 +376,12 @@ export default function ConsumerProfilePage() {
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3">
                     <AlertCircle size={20} className="text-red-600" />
                     <p className="text-sm text-red-700">{error}</p>
+                    <button
+                        onClick={() => setError(null)}
+                        className="ml-auto text-red-500 hover:text-red-700"
+                    >
+                        <X size={16} />
+                    </button>
                 </div>
             )}
 
@@ -328,7 +412,7 @@ export default function ConsumerProfilePage() {
                         </div>
                         <div className="text-white pb-2">
                             <h2 className="text-xl font-bold">{profile.name}</h2>
-                            <p className="text-emerald-100 text-sm capitalize">{profile.role}</p>
+                            <p className="text-emerald-100 text-sm capitalize">{getRoleDisplay(profile.role)}</p>
                         </div>
                     </div>
                 </div>
@@ -446,7 +530,17 @@ export default function ConsumerProfilePage() {
                                 <div className="flex-1">
                                     <p className="text-xs text-gray-500">Account Created</p>
                                     <p className="text-sm font-medium text-gray-800">
-                                        {new Date(profile.createdAt).toLocaleDateString()}
+                                        {profile.createdAt ? new Date(profile.createdAt).toLocaleDateString() : 'N/A'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center space-x-3">
+                                <Calendar size={18} className="text-gray-400" />
+                                <div className="flex-1">
+                                    <p className="text-xs text-gray-500">Last Updated</p>
+                                    <p className="text-sm font-medium text-gray-800">
+                                        {profile.updatedAt ? new Date(profile.updatedAt).toLocaleString() : 'N/A'}
                                     </p>
                                 </div>
                             </div>
@@ -477,7 +571,7 @@ export default function ConsumerProfilePage() {
                                 <div className="flex items-center space-x-3">
                                     <Zap size={18} className="text-gray-400" />
                                     <div className="flex-1">
-                                        <p className="text-xs text-gray-500">Meter Number</p>
+                                        <p className="text-xs text-gray-500">Primary Meter</p>
                                         {isEditing ? (
                                             <input
                                                 type="text"
@@ -487,8 +581,31 @@ export default function ConsumerProfilePage() {
                                                 className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                             />
                                         ) : (
-                                            <p className="text-sm font-medium text-gray-800">{profile.meterNo}</p>
+                                            <p className="text-sm font-bold text-emerald-600">{profile.meterNo}</p>
                                         )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {profile.meters && profile.meters.length > 0 && (
+                                <div className="flex items-center space-x-3">
+                                    <Package size={18} className="text-gray-400" />
+                                    <div className="flex-1">
+                                        <p className="text-xs text-gray-500">All Meters</p>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {profile.meters.map((meter, index) => (
+                                                <span
+                                                    key={index}
+                                                    className={`px-2 py-0.5 text-xs font-medium rounded-full ${meter === profile.meterNo
+                                                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                                                        : 'bg-gray-100 text-gray-600'
+                                                        }`}
+                                                >
+                                                    {meter}
+                                                    {meter === profile.meterNo && ' ★'}
+                                                </span>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -536,7 +653,7 @@ export default function ConsumerProfilePage() {
                                         className="w-full px-4 py-2.5 bg-red-50 text-red-600 text-sm rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center space-x-2"
                                     >
                                         <LogOut size={16} />
-                                        <span>Logout from all devices</span>
+                                        <span>Logout</span>
                                     </button>
                                 </div>
                             )}

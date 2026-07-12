@@ -1,7 +1,7 @@
-// app/dashboard/profile/page.tsx
+// app/dashboard/admin/profile/page.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     User,
     Mail,
@@ -32,50 +32,109 @@ import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
 
 interface ProfileData {
+    id?: string;
     name: string;
     email: string;
     mobile: string;
     nidNo: string;
-    userType: 'existing_consumer' | 'applicant_new_connection';
     feederName: string;
     meterNo: string;
     role: string;
     address: string;
-    designation: string;
-    department: string;
-    joinDate: string;
-    profileImage: string;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+    meters?: string[];
+    claimedMeters?: any[];
+    profileImage?: string;
 }
 
-export default function ProfilePage() {
+interface PasswordData {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+}
+
+export default function AdminProfilePage() {
     const router = useRouter();
+    const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState<any>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showPasswordModal, setShowPasswordModal] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [session, setSession] = useState<any>(null);
+    const [userId, setUserId] = useState<string | null>(null);
 
     const [profile, setProfile] = useState<ProfileData>({
-        name: 'Md. Mehedy Hasan',
-        email: 'admin@wzpdc.gov.bd',
-        mobile: '01712345678',
-        nidNo: '12345678901234567',
-        userType: 'existing_consumer',
-        feederName: 'Trimohoni',
-        meterNo: 'MTR-2026-001',
-        role: 'admin',
-        address: 'Boyra Main Road, Khulna',
-        designation: 'System Administrator',
-        department: 'Sales and Distribution Division-1',
-        joinDate: '2020-01-15',
-        profileImage: '',
+        name: '',
+        email: '',
+        mobile: '',
+        nidNo: '',
+        feederName: '',
+        meterNo: '',
+        role: 'consumer',
+        address: '',
+        isActive: true,
+        createdAt: '',
+        updatedAt: '',
+        meters: [],
+        claimedMeters: [],
     });
 
-    const [passwordData, setPasswordData] = useState({
+    const [passwordData, setPasswordData] = useState<PasswordData>({
         currentPassword: '',
         newPassword: '',
         confirmPassword: '',
     });
     const [passwordErrors, setPasswordErrors] = useState<{ [key: string]: string }>({});
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+    useEffect(() => {
+        const fetchUser = async () => {
+            try {
+                const { data, error } = await authClient.getSession();
+                if (error) {
+                    console.error('Session error:', error);
+                    router.push('/auth/sign-in');
+                    return;
+                }
+                if (data?.user) {
+                    setSession(data);
+                    setUser(data.user);
+                    setUserId(data.user.id || data.user._id);
+                    setProfile({
+                        id: data.user.id || data.user._id,
+                        name: data.user.name || '',
+                        email: data.user.email || '',
+                        mobile: data.user.mobile || '',
+                        nidNo: data.user.nidNo || '',
+                        feederName: data.user.feederName || '',
+                        meterNo: data.user.meterNo || '',
+                        role: data.user.role || 'consumer',
+                        address: data.user.address || '',
+                        isActive: data.user.isActive !== undefined ? data.user.isActive : true,
+                        createdAt: data.user.createdAt || new Date().toISOString(),
+                        updatedAt: data.user.updatedAt || new Date().toISOString(),
+                        meters: data.user.meters || [],
+                        claimedMeters: data.user.claimedMeters || [],
+                        profileImage: data.user.profileImage || '',
+                    });
+                } else {
+                    router.push('/auth/sign-in');
+                }
+            } catch (error) {
+                console.error('Error fetching user:', error);
+                setError('Failed to load profile data');
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchUser();
+    }, [router]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -83,16 +142,58 @@ export default function ProfilePage() {
     };
 
     const handleSave = async () => {
+        if (!userId) {
+            setError('User ID not found');
+            return;
+        }
+
         setIsSaving(true);
+        setError(null);
         setSaveSuccess(false);
 
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(`${API_URL}/api/admin/users/${userId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: profile.name,
+                    email: profile.email,
+                    mobile: profile.mobile,
+                    nidNo: profile.nidNo,
+                    meterNo: profile.meterNo,
+                    feederName: profile.feederName,
+                    address: profile.address,
+                    role: profile.role,
+                    isActive: profile.isActive,
+                }),
+            });
 
-        setIsSaving(false);
-        setIsEditing(false);
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+            const responseData = await response.json();
+
+            if (!response.ok) {
+                throw new Error(responseData.message || 'Failed to update profile');
+            }
+
+            if (responseData.success && responseData.data) {
+                setProfile(prev => ({
+                    ...prev,
+                    ...responseData.data,
+                }));
+                setSaveSuccess(true);
+                setTimeout(() => setSaveSuccess(false), 3000);
+            }
+
+        } catch (error: any) {
+            console.error('Error updating profile:', error);
+            setError(error.message || 'Failed to update profile');
+        } finally {
+            setIsSaving(false);
+            setIsEditing(false);
+        }
     };
 
     const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,13 +226,55 @@ export default function ProfilePage() {
     const handlePasswordSubmit = async () => {
         if (!validatePassword()) return;
 
-        setIsSaving(true);
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setIsSaving(false);
-        setShowPasswordModal(false);
-        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        setIsChangingPassword(true);
+        setError(null);
+
+        try {
+            // ✅ Get the session first to ensure we have a valid token
+            const sessionData = await authClient.getSession();
+            if (!sessionData?.data?.user) {
+                setPasswordErrors({
+                    currentPassword: 'Session expired. Please login again.'
+                });
+                setIsChangingPassword(false);
+                return;
+            }
+
+            const token = localStorage.getItem('auth_token');
+
+            // ✅ Include credentials for cookie-based auth
+            const response = await fetch(`${API_URL}/api/auth/change-password`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    currentPassword: passwordData.currentPassword,
+                    newPassword: passwordData.newPassword,
+                }),
+            });
+
+            const responseData = await response.json();
+
+            if (!response.ok) {
+                throw new Error(responseData.message || 'Failed to change password');
+            }
+
+            setShowPasswordModal(false);
+            setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 3000);
+
+        } catch (error: any) {
+            console.error('Error changing password:', error);
+            setPasswordErrors({
+                currentPassword: error.message || 'Failed to change password. Please check your current password.'
+            });
+        } finally {
+            setIsChangingPassword(false);
+        }
     };
 
     const handleLogout = async () => {
@@ -150,12 +293,21 @@ export default function ProfilePage() {
             connection_wing: { color: 'bg-orange-100 text-orange-700', label: 'Connection Wing' },
             complaint_manager: { color: 'bg-red-100 text-red-700', label: 'Complaint Manager' },
             billing_wings: { color: 'bg-teal-100 text-teal-700', label: 'Billing Wings' },
-            customer: { color: 'bg-emerald-100 text-emerald-700', label: 'Customer' },
+            consumer: { color: 'bg-emerald-100 text-emerald-700', label: 'Consumer' },
+            applicant: { color: 'bg-yellow-100 text-yellow-700', label: 'Applicant' },
         };
-        return roles[role] || roles.customer;
+        return roles[role] || roles.consumer;
     };
 
     const roleBadge = getRoleBadge(profile.role);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 size={40} className="animate-spin text-emerald-600" />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -207,6 +359,20 @@ export default function ProfilePage() {
                 </div>
             </div>
 
+            {/* Error Message */}
+            {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-3">
+                    <AlertCircle size={20} className="text-red-600" />
+                    <p className="text-sm text-red-700">{error}</p>
+                    <button
+                        onClick={() => setError(null)}
+                        className="ml-auto text-red-500 hover:text-red-700"
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+            )}
+
             {/* Save Success Message */}
             {saveSuccess && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center space-x-3">
@@ -224,7 +390,7 @@ export default function ProfilePage() {
                             <div className="w-24 h-24 rounded-full bg-white p-1 shadow-lg">
                                 <div className="w-full h-full rounded-full bg-emerald-100 flex items-center justify-center">
                                     <span className="text-3xl font-bold text-emerald-600">
-                                        {profile.name.charAt(0).toUpperCase()}
+                                        {profile.name?.charAt(0).toUpperCase() || '?'}
                                     </span>
                                 </div>
                             </div>
@@ -234,7 +400,7 @@ export default function ProfilePage() {
                         </div>
                         <div className="text-white pb-2">
                             <h2 className="text-xl font-bold">{profile.name}</h2>
-                            <p className="text-emerald-100 text-sm">{profile.designation}</p>
+                            <p className="text-emerald-100 text-sm">{roleBadge.label}</p>
                         </div>
                     </div>
                 </div>
@@ -293,7 +459,7 @@ export default function ProfilePage() {
                                             className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                         />
                                     ) : (
-                                        <p className="text-sm font-medium text-gray-800">{profile.mobile}</p>
+                                        <p className="text-sm font-medium text-gray-800">{profile.mobile || 'Not provided'}</p>
                                     )}
                                 </div>
                             </div>
@@ -311,25 +477,7 @@ export default function ProfilePage() {
                                             className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                         />
                                     ) : (
-                                        <p className="text-sm font-medium text-gray-800">{profile.nidNo}</p>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="flex items-center space-x-3">
-                                <Building size={18} className="text-gray-400" />
-                                <div className="flex-1">
-                                    <p className="text-xs text-gray-500">Department</p>
-                                    {isEditing ? (
-                                        <input
-                                            type="text"
-                                            name="department"
-                                            value={profile.department}
-                                            onChange={handleChange}
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                        />
-                                    ) : (
-                                        <p className="text-sm font-medium text-gray-800">{profile.department}</p>
+                                        <p className="text-sm font-medium text-gray-800">{profile.nidNo || 'Not provided'}</p>
                                     )}
                                 </div>
                             </div>
@@ -347,7 +495,7 @@ export default function ProfilePage() {
                                             className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                         />
                                     ) : (
-                                        <p className="text-sm font-medium text-gray-800">{profile.address}</p>
+                                        <p className="text-sm font-medium text-gray-800">{profile.address || 'Not provided'}</p>
                                     )}
                                 </div>
                             </div>
@@ -359,49 +507,36 @@ export default function ProfilePage() {
                                 <Shield size={18} className="text-gray-400" />
                                 <div className="flex-1">
                                     <p className="text-xs text-gray-500">Role</p>
-                                    <span className={`inline-block px-3 py-1 text-xs font-medium rounded-full ${roleBadge.color}`}>
-                                        {roleBadge.label}
-                                    </span>
+                                    {isEditing ? (
+                                        <select
+                                            name="role"
+                                            value={profile.role}
+                                            onChange={handleChange}
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                                        >
+                                            <option value="consumer">Consumer</option>
+                                            <option value="applicant">Applicant</option>
+                                            <option value="admin">Admin</option>
+                                            <option value="xen">XEN</option>
+                                            <option value="connection_wing">Connection Wing</option>
+                                            <option value="complaint_manager">Complaint Manager</option>
+                                            <option value="billing_wings">Billing Wings</option>
+                                        </select>
+                                    ) : (
+                                        <span className={`inline-block px-3 py-1 text-xs font-medium rounded-full ${roleBadge.color}`}>
+                                            {roleBadge.label}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
 
                             <div className="flex items-center space-x-3">
                                 <Calendar size={18} className="text-gray-400" />
                                 <div className="flex-1">
-                                    <p className="text-xs text-gray-500">Join Date</p>
-                                    {isEditing ? (
-                                        <input
-                                            type="date"
-                                            name="joinDate"
-                                            value={profile.joinDate}
-                                            onChange={handleChange}
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                        />
-                                    ) : (
-                                        <p className="text-sm font-medium text-gray-800">{profile.joinDate}</p>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="flex items-center space-x-3">
-                                <Home size={18} className="text-gray-400" />
-                                <div className="flex-1">
-                                    <p className="text-xs text-gray-500">User Type</p>
-                                    {isEditing ? (
-                                        <select
-                                            name="userType"
-                                            value={profile.userType}
-                                            onChange={handleChange}
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                                        >
-                                            <option value="existing_consumer">Existing Consumer</option>
-                                            <option value="applicant_new_connection">New Applicant</option>
-                                        </select>
-                                    ) : (
-                                        <p className="text-sm font-medium text-gray-800 capitalize">
-                                            {profile.userType === 'existing_consumer' ? 'Existing Consumer' : 'New Applicant'}
-                                        </p>
-                                    )}
+                                    <p className="text-xs text-gray-500">Joined</p>
+                                    <p className="text-sm font-medium text-gray-800">
+                                        {profile.createdAt ? new Date(profile.createdAt).toLocaleDateString() : 'N/A'}
+                                    </p>
                                 </div>
                             </div>
 
@@ -409,7 +544,7 @@ export default function ProfilePage() {
                                 <div className="flex items-center space-x-3">
                                     <Zap size={18} className="text-gray-400" />
                                     <div className="flex-1">
-                                        <p className="text-xs text-gray-500">Meter Number</p>
+                                        <p className="text-xs text-gray-500">Primary Meter</p>
                                         {isEditing ? (
                                             <input
                                                 type="text"
@@ -419,7 +554,7 @@ export default function ProfilePage() {
                                                 className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                                             />
                                         ) : (
-                                            <p className="text-sm font-medium text-gray-800">{profile.meterNo}</p>
+                                            <p className="text-sm font-medium text-emerald-600">{profile.meterNo}</p>
                                         )}
                                     </div>
                                 </div>
@@ -449,13 +584,39 @@ export default function ProfilePage() {
                                 </div>
                             )}
 
+                            {/* All Meters */}
+                            {profile.meters && profile.meters.length > 0 && (
+                                <div className="flex items-center space-x-3">
+                                    <Building size={18} className="text-gray-400" />
+                                    <div className="flex-1">
+                                        <p className="text-xs text-gray-500">All Meters</p>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {profile.meters.map((meter, index) => (
+                                                <span
+                                                    key={index}
+                                                    className={`px-2 py-0.5 text-xs rounded ${meter === profile.meterNo
+                                                        ? 'bg-emerald-100 text-emerald-700 font-medium'
+                                                        : 'bg-gray-100 text-gray-600'
+                                                        }`}
+                                                >
+                                                    {meter}
+                                                </span>
+                                            ))}
+                                            <span className="text-xs text-gray-400 ml-1">
+                                                ({profile.meters.length} total)
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="flex items-center space-x-3">
                                 <Globe size={18} className="text-gray-400" />
                                 <div className="flex-1">
                                     <p className="text-xs text-gray-500">Status</p>
                                     <p className="text-sm font-medium text-green-600 flex items-center space-x-1">
                                         <CheckCircle size={14} />
-                                        <span>Active</span>
+                                        <span>{profile.isActive ? 'Active' : 'Inactive'}</span>
                                     </p>
                                 </div>
                             </div>
@@ -467,7 +628,7 @@ export default function ProfilePage() {
                                         className="w-full px-4 py-2.5 bg-red-50 text-red-600 text-sm rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center space-x-2"
                                     >
                                         <LogOut size={16} />
-                                        <span>Logout from all devices</span>
+                                        <span>Logout</span>
                                     </button>
                                 </div>
                             )}
@@ -560,11 +721,11 @@ export default function ProfilePage() {
                             </button>
                             <button
                                 onClick={handlePasswordSubmit}
-                                disabled={isSaving}
-                                className={`px-4 py-2 bg-emerald-600 text-white rounded-lg transition-colors flex items-center space-x-2 ${isSaving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-emerald-700'
+                                disabled={isChangingPassword}
+                                className={`px-4 py-2 bg-emerald-600 text-white rounded-lg transition-colors flex items-center space-x-2 ${isChangingPassword ? 'opacity-70 cursor-not-allowed' : 'hover:bg-emerald-700'
                                     }`}
                             >
-                                {isSaving ? (
+                                {isChangingPassword ? (
                                     <>
                                         <Loader2 size={16} className="animate-spin" />
                                         <span>Updating...</span>

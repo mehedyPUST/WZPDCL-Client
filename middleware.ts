@@ -5,6 +5,29 @@ import type { NextRequest } from 'next/server';
 // Public routes (accessible without login)
 const publicRoutes = ['/', '/login', '/register', '/api/auth/callback/google'];
 
+// ✅ API routes that should be public (no auth required)
+const publicApiRoutes = [
+    '/api/health',
+    '/api/auth/sign-up/email',
+];
+
+// ✅ API routes that need auth but should bypass middleware check
+const protectedApiRoutes = [
+    '/api/auth/change-password',
+    '/api/admin/users',
+    '/api/billing/',
+    '/api/complaints',
+    '/api/connection-applications',
+    '/api/connection-wing/',
+    '/api/meters/',
+    '/api/transactions/',
+    '/api/substations',
+    '/api/xen/',
+    '/api/consumer/',
+    '/api/payment-verify',
+    '/api/create-payment-session',
+];
+
 // Role to dashboard path mapping
 const roleDashboardMap: Record<string, string> = {
     admin: '/dashboard/admin',
@@ -71,19 +94,55 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // ✅ 2. Get session from Better Auth
-    const sessionCookie = request.cookies.get('better-auth.session')?.value;
-
-    // If trying to access dashboard without session, redirect to login
-    if (!sessionCookie && pathname.startsWith('/dashboard')) {
-        return NextResponse.redirect(new URL('/login', request.url));
+    // ✅ 2. Allow public API routes (no auth needed)
+    if (publicApiRoutes.some(route => pathname.startsWith(route))) {
+        return NextResponse.next();
     }
 
-    // ✅ 3. For dashboard routes, validate role-based access
+    // ✅ 3. For API routes, just check if session exists, don't redirect
+    if (pathname.startsWith('/api/')) {
+        // Check if this is a protected API route
+        const isProtectedApi = protectedApiRoutes.some(route => pathname.startsWith(route));
+
+        // If it's not a protected API route, let it through
+        if (!isProtectedApi) {
+            return NextResponse.next();
+        }
+
+        // For protected API routes, check session
+        const sessionCookie = request.cookies.get('better-auth.session')?.value;
+
+        // If no session, return 401 Unauthorized (let the API handle it)
+        if (!sessionCookie) {
+            return new NextResponse(
+                JSON.stringify({
+                    success: false,
+                    message: 'Unauthorized. Please login.',
+                }),
+                {
+                    status: 401,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+        }
+
+        // Let the API handle the auth validation
+        return NextResponse.next();
+    }
+
+    // ✅ 4. For dashboard routes, validate session
     if (pathname.startsWith('/dashboard')) {
+        const sessionCookie = request.cookies.get('better-auth.session')?.value;
+
+        // If trying to access dashboard without session, redirect to login
+        if (!sessionCookie) {
+            return NextResponse.redirect(new URL('/login', request.url));
+        }
+
         try {
-            // Get user role from session (you can also decode the JWT)
-            // For now, we'll check the path pattern
+            // Get user role from session
             const userRole = await getUserRoleFromSession(request);
 
             if (!userRole) {
@@ -133,23 +192,25 @@ export async function middleware(request: NextRequest) {
 // Helper function to get user role from session
 async function getUserRoleFromSession(request: NextRequest): Promise<string | null> {
     try {
-        // Get the session cookie
         const sessionToken = request.cookies.get('better-auth.session')?.value;
 
         if (!sessionToken) {
             return null;
         }
 
-        // For Better Auth, we need to decode the session or fetch from API
-        // Since we can't make API calls in middleware easily,
-        // we'll decode the JWT session token
-
+        // Try to decode the JWT session token
         try {
-            // Better Auth session token is a JWT
             const parts = sessionToken.split('.');
             if (parts.length === 3) {
                 const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-                return payload.role || null;
+
+                // Better Auth stores role in the user object
+                if (payload.user && payload.user.role) {
+                    return payload.user.role;
+                }
+                if (payload.role) {
+                    return payload.role;
+                }
             }
         } catch (e) {
             // If we can't decode, try to get from a custom cookie

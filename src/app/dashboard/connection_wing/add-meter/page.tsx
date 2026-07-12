@@ -25,11 +25,15 @@ import {
     Hash,
     Tag,
     User,
+    CreditCard,
+    Phone,
+    Mail,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
 interface FormData {
     meterNo: string;
+    meterSerialNo: string;
     meterType: 'single_phase' | 'three_phase';
     manufacturer: string;
     feederName: string;
@@ -37,6 +41,10 @@ interface FormData {
     consumerType: 'residential' | 'commercial' | 'industrial';
     initialReading: string;
     specialNote: string;
+    consumerName: string;
+    address: string;
+    mobile: string;
+    email: string;
 }
 
 interface FormErrors {
@@ -50,6 +58,9 @@ interface MeterCheckResult {
     consumerName?: string;
     claimedBy?: string;
     status?: string;
+    meterType?: string;
+    manufacturer?: string;
+    feederName?: string;
 }
 
 const FEEDER_OPTIONS = ['Trimohoni', 'Circuit-Hose', 'DC-Court', 'N.S-Road'];
@@ -71,6 +82,7 @@ export default function ConnectionWingAddMeterPage() {
 
     const [formData, setFormData] = useState<FormData>({
         meterNo: '',
+        meterSerialNo: '',
         meterType: 'single_phase',
         manufacturer: '',
         feederName: '',
@@ -78,6 +90,10 @@ export default function ConnectionWingAddMeterPage() {
         consumerType: 'residential',
         initialReading: '',
         specialNote: '',
+        consumerName: '',
+        address: '',
+        mobile: '',
+        email: '',
     });
 
     const [errors, setErrors] = useState<FormErrors>({});
@@ -150,6 +166,17 @@ export default function ConnectionWingAddMeterPage() {
                     ...prev,
                     meterNo: data.data.message || 'This meter number already exists in the system'
                 }));
+
+                // ✅ Pre-fill existing meter info if available
+                if (data.data.meterType) {
+                    setFormData(prev => ({
+                        ...prev,
+                        meterType: data.data.meterType || prev.meterType,
+                        manufacturer: data.data.manufacturer || prev.manufacturer,
+                        feederName: data.data.feederName || prev.feederName,
+                        consumerName: data.data.consumerName || prev.consumerName,
+                    }));
+                }
             } else {
                 setErrors(prev => ({ ...prev, meterNo: '' }));
             }
@@ -176,17 +203,46 @@ export default function ConnectionWingAddMeterPage() {
             newErrors.meterNo = 'This meter number already exists. Please use a different meter number.';
         }
 
+        if (!formData.meterSerialNo.trim()) {
+            newErrors.meterSerialNo = 'Meter serial number is required';
+        }
+
         if (!formData.meterType) {
             newErrors.meterType = 'Please select meter type';
         }
+
         if (!formData.manufacturer) {
             newErrors.manufacturer = 'Please select manufacturer';
         }
+
         if (!formData.feederName) {
             newErrors.feederName = 'Please select a feeder';
         }
+
         if (!formData.connectionDate) {
             newErrors.connectionDate = 'Connection date is required';
+        }
+
+        if (formData.initialReading && (isNaN(Number(formData.initialReading)) || Number(formData.initialReading) < 0)) {
+            newErrors.initialReading = 'Please enter a valid reading';
+        }
+
+        if (!formData.consumerName.trim()) {
+            newErrors.consumerName = 'Consumer name is required';
+        }
+
+        if (!formData.address.trim()) {
+            newErrors.address = 'Address is required';
+        }
+
+        if (!formData.mobile.trim()) {
+            newErrors.mobile = 'Mobile number is required';
+        } else if (!/^[0-9]{10,15}$/.test(formData.mobile.trim())) {
+            newErrors.mobile = 'Please enter a valid mobile number';
+        }
+
+        if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+            newErrors.email = 'Please enter a valid email address';
         }
 
         setErrors(newErrors);
@@ -218,6 +274,7 @@ export default function ConnectionWingAddMeterPage() {
                 },
                 body: JSON.stringify({
                     meterNo: formData.meterNo.trim(),
+                    meterSerialNo: formData.meterSerialNo.trim(),
                     meterType: formData.meterType,
                     manufacturer: formData.manufacturer,
                     feederName: formData.feederName,
@@ -225,10 +282,10 @@ export default function ConnectionWingAddMeterPage() {
                     consumerType: formData.consumerType,
                     initialReading: Number(formData.initialReading) || 0,
                     specialNote: formData.specialNote || '',
-                    consumerName: 'Pending',
-                    address: '',
-                    mobile: '',
-                    email: '',
+                    consumerName: formData.consumerName.trim(),
+                    address: formData.address.trim(),
+                    mobile: formData.mobile.trim(),
+                    email: formData.email.trim(),
                 }),
             });
 
@@ -252,6 +309,7 @@ export default function ConnectionWingAddMeterPage() {
 
             setFormData({
                 meterNo: '',
+                meterSerialNo: '',
                 meterType: 'single_phase',
                 manufacturer: '',
                 feederName: '',
@@ -259,6 +317,10 @@ export default function ConnectionWingAddMeterPage() {
                 consumerType: 'residential',
                 initialReading: '',
                 specialNote: '',
+                consumerName: '',
+                address: '',
+                mobile: '',
+                email: '',
             });
             setMeterCheckResult(null);
             setMeterChecked(false);
@@ -281,7 +343,7 @@ export default function ConnectionWingAddMeterPage() {
                     </div>
                     <h2 className="text-2xl font-bold text-gray-800 mb-2">Meter Added Successfully! 🎉</h2>
                     <p className="text-gray-500 mb-4">
-                        The meter has been added to the system. Now you can add a consumer and link this meter.
+                        The meter has been added to the system. Now you can link this meter to a consumer or assign it to an application.
                     </p>
                     {meterId && (
                         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-6">
@@ -293,9 +355,8 @@ export default function ConnectionWingAddMeterPage() {
                         <p className="text-sm text-blue-700 font-medium">📌 Next Steps:</p>
                         <ul className="text-sm text-blue-600 list-disc list-inside mt-2 space-y-1">
                             <li>Go to <strong>"Add Consumer"</strong> to link this meter to a consumer</li>
-                            <li>Consumer can then register on the website</li>
-                            <li>Consumer can claim the meter to their account</li>
-                            <li>After claiming, bills will appear for this meter</li>
+                            <li>Or <strong>assign it directly</strong> to a new connection application</li>
+                            <li>Consumer can then register on the website and claim this meter</li>
                         </ul>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -341,7 +402,7 @@ export default function ConnectionWingAddMeterPage() {
                         <Package size={24} className="text-emerald-600" />
                         <span>Add New Meter</span>
                     </h1>
-                    <p className="text-gray-500 text-sm">Add a meter so consumers can claim it later</p>
+                    <p className="text-gray-500 text-sm">Add a meter with complete details and link to a consumer</p>
                 </div>
                 <button
                     onClick={() => router.push('/dashboard/connection_wing')}
@@ -381,11 +442,15 @@ export default function ConnectionWingAddMeterPage() {
                             </li>
                             <li className="flex items-center space-x-2">
                                 <ClipboardCheck size={14} />
-                                <span>System will automatically check for duplicates</span>
+                                <span>Serial number must be unique</span>
                             </li>
                             <li className="flex items-center space-x-2">
                                 <ClipboardCheck size={14} />
-                                <span>After adding, go to "Add Consumer" to link with a consumer</span>
+                                <span>Consumer information is required for direct linking</span>
+                            </li>
+                            <li className="flex items-center space-x-2">
+                                <ClipboardCheck size={14} />
+                                <span>After adding, you can assign to new connection applications</span>
                             </li>
                         </ul>
                     </div>
@@ -412,9 +477,9 @@ export default function ConnectionWingAddMeterPage() {
                                     value={formData.meterNo}
                                     onChange={handleChange}
                                     className={`w-full pl-10 pr-12 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${errors.meterNo ? 'border-red-500 bg-red-50' :
-                                            meterCheckResult?.exists ? 'border-red-500 bg-red-50' :
-                                                meterCheckResult?.isAvailable ? 'border-green-500 bg-green-50' :
-                                                    'border-gray-200'
+                                        meterCheckResult?.exists ? 'border-red-500 bg-red-50' :
+                                            meterCheckResult?.isAvailable ? 'border-green-500 bg-green-50' :
+                                                'border-gray-200'
                                         }`}
                                     placeholder="e.g., MTR-2026-016"
                                     disabled={isCheckingMeter}
@@ -452,8 +517,8 @@ export default function ConnectionWingAddMeterPage() {
                         {/* Meter availability status messages */}
                         {meterCheckResult && (
                             <div className={`mt-3 p-4 rounded-xl border ${meterCheckResult.exists
-                                    ? 'bg-red-50 border-red-200'
-                                    : 'bg-emerald-50 border-emerald-200'
+                                ? 'bg-red-50 border-red-200'
+                                : 'bg-emerald-50 border-emerald-200'
                                 }`}>
                                 <div className="flex items-start space-x-3">
                                     {meterCheckResult.exists ? (
@@ -493,6 +558,26 @@ export default function ConnectionWingAddMeterPage() {
                             <Info size={12} />
                             <span>Click "Check" to verify if this meter number is available</span>
                         </p>
+                    </div>
+
+                    {/* Meter Serial Number */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                            Meter Serial No <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                            <Hash size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="text"
+                                name="meterSerialNo"
+                                value={formData.meterSerialNo}
+                                onChange={handleChange}
+                                className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${errors.meterSerialNo ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                    }`}
+                                placeholder="e.g., SN-2026-001"
+                            />
+                        </div>
+                        {errors.meterSerialNo && <p className="text-red-500 text-sm mt-1">{errors.meterSerialNo}</p>}
                     </div>
 
                     {/* Meter Type */}
@@ -615,10 +700,92 @@ export default function ConnectionWingAddMeterPage() {
                                 onChange={handleChange}
                                 step="0.01"
                                 min="0"
-                                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                                className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${errors.initialReading ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                    }`}
                                 placeholder="0.00"
                             />
                         </div>
+                        {errors.initialReading && <p className="text-red-500 text-sm mt-1">{errors.initialReading}</p>}
+                    </div>
+
+                    {/* Consumer Name */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                            Consumer Name <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                            <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="text"
+                                name="consumerName"
+                                value={formData.consumerName}
+                                onChange={handleChange}
+                                className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${errors.consumerName ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                    }`}
+                                placeholder="Enter consumer name"
+                            />
+                        </div>
+                        {errors.consumerName && <p className="text-red-500 text-sm mt-1">{errors.consumerName}</p>}
+                    </div>
+
+                    {/* Mobile */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                            Mobile Number <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                            <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="text"
+                                name="mobile"
+                                value={formData.mobile}
+                                onChange={handleChange}
+                                className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${errors.mobile ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                    }`}
+                                placeholder="01XXXXXXXXX"
+                            />
+                        </div>
+                        {errors.mobile && <p className="text-red-500 text-sm mt-1">{errors.mobile}</p>}
+                    </div>
+
+                    {/* Email */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                            Email Address
+                        </label>
+                        <div className="relative">
+                            <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="email"
+                                name="email"
+                                value={formData.email}
+                                onChange={handleChange}
+                                className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${errors.email ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                    }`}
+                                placeholder="consumer@example.com"
+                            />
+                        </div>
+                        {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+                    </div>
+
+                    {/* Address */}
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                            Address <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                            <MapPin size={18} className="absolute left-3 top-3 text-gray-400" />
+                            <textarea
+                                name="address"
+                                value={formData.address}
+                                onChange={handleChange}
+                                rows={2}
+                                className={`w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${errors.address ? 'border-red-500 bg-red-50' : 'border-gray-200'
+                                    }`}
+                                placeholder="Enter full address"
+                            />
+                        </div>
+                        {errors.address && <p className="text-red-500 text-sm mt-1">{errors.address}</p>}
                     </div>
 
                     {/* Special Note */}
@@ -673,8 +840,8 @@ export default function ConnectionWingAddMeterPage() {
                             type="submit"
                             disabled={isSubmitting || !meterCheckResult?.isAvailable}
                             className={`px-8 py-3 bg-emerald-600 text-white rounded-xl font-medium flex items-center space-x-2 transition-all shadow-sm hover:shadow-md ${isSubmitting || !meterCheckResult?.isAvailable
-                                    ? 'opacity-50 cursor-not-allowed'
-                                    : 'hover:bg-emerald-700'
+                                ? 'opacity-50 cursor-not-allowed'
+                                : 'hover:bg-emerald-700'
                                 }`}
                         >
                             {isSubmitting ? (
