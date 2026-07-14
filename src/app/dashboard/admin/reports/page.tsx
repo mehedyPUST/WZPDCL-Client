@@ -47,6 +47,7 @@ import {
     Minimize2,
     Globe,
     Smartphone,
+    User,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 

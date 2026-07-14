@@ -18,6 +18,9 @@ export default function DashboardRedirectPage() {
                     return;
                 }
 
+                // ✅ FIX: Use type assertion for custom fields
+                const userData = data.user as any;
+
                 // ✅ Role-based redirect mapping
                 const roleMap: Record<string, string> = {
                     admin: '/dashboard/admin',
@@ -28,7 +31,7 @@ export default function DashboardRedirectPage() {
                     consumer: '/dashboard/consumer',
                 };
 
-                const redirectPath = roleMap[data.user.role] || '/dashboard/consumer';
+                const redirectPath = roleMap[userData.role] || '/dashboard/consumer';
                 router.push(redirectPath);
             } catch (error) {
                 console.error('Error:', error);

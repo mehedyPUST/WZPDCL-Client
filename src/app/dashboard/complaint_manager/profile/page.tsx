@@ -1,3 +1,4 @@
+// app/dashboard/complaint_manager/profile/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -61,8 +62,13 @@ export default function ComplaintManagerProfilePage() {
             try {
                 const { data } = await authClient.getSession();
                 if (data?.user) {
-                    setProfile(data.user);
-                    setEditData({ name: data.user.name || '', mobile: data.user.mobile || '' });
+                    // ✅ FIX: Use type assertion for custom fields
+                    const user = data.user as any;
+                    setProfile(user);
+                    setEditData({
+                        name: user.name || '',
+                        mobile: user.mobile || ''
+                    });
                 }
             } catch (err) {
                 console.error('Error fetching profile:', err);

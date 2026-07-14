@@ -111,7 +111,8 @@ export default function XenProfilePage() {
                     return;
                 }
 
-                const user = data.user;
+                // ✅ FIX: Use type assertion for custom fields
+                const user = data.user as any;
 
                 // Fetch application statistics
                 let totalApplications = 0;

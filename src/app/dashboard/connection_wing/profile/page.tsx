@@ -1,3 +1,4 @@
+// app/dashboard/connection_wing/profile/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -108,7 +109,8 @@ export default function ConnectionWingProfilePage() {
             try {
                 const { data } = await authClient.getSession();
                 if (data?.user) {
-                    const user = data.user;
+                    // ✅ FIX: Use type assertion for custom fields
+                    const user = data.user as any;
 
                     // ✅ Fetch stats from API
                     let totalConsumersAdded = 0;

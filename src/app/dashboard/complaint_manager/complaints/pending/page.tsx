@@ -33,6 +33,8 @@ import {
     FileText,
     Activity,
     Plus,
+    TrendingUp,
+    TrendingDown,
 } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
@@ -640,8 +642,8 @@ export default function ComplaintManagerPendingPage() {
                                     key={page}
                                     onClick={() => setCurrentPage(page)}
                                     className={`px-3 py-1 rounded-lg text-sm transition-colors ${currentPage === page
-                                            ? 'bg-emerald-600 text-white'
-                                            : 'border border-gray-200 hover:bg-gray-50'
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'border border-gray-200 hover:bg-gray-50'
                                         }`}
                                 >
                                     {page}
@@ -806,8 +808,8 @@ export default function ComplaintManagerPendingPage() {
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center space-x-3">
                                 <div className={`p-2 rounded-full ${actionType === 'under_action' ? 'bg-blue-100' :
-                                        actionType === 'solved' ? 'bg-green-100' :
-                                            'bg-red-100'
+                                    actionType === 'solved' ? 'bg-green-100' :
+                                        'bg-red-100'
                                     }`}>
                                     {actionType === 'under_action' && <Activity size={20} className="text-blue-600" />}
                                     {actionType === 'solved' && <CheckCircle size={20} className="text-green-600" />}

@@ -138,14 +138,16 @@ export default function ConsumerConnectionsPage() {
         const getUser = async () => {
             try {
                 const { data } = await authClient.getSession();
-                setUser(data?.user || null);
-                if (data?.user) {
+                // ✅ FIX: Use type assertion for custom fields
+                const userData = data?.user as any;
+                setUser(userData || null);
+                if (userData) {
                     setFormData(prev => ({
                         ...prev,
-                        applicantName: data.user.name || '',
-                        email: data.user.email || '',
-                        mobile: data.user.mobile || '',
-                        nidNo: data.user.nidNo || '',
+                        applicantName: userData.name || '',
+                        email: userData.email || '',
+                        mobile: userData.mobile || '',
+                        nidNo: userData.nidNo || '',
                     }));
                 }
             } catch (error) {

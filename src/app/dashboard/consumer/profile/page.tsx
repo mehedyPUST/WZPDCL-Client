@@ -102,7 +102,8 @@ export default function ConsumerProfilePage() {
                     return;
                 }
 
-                const user = data.user;
+                // ✅ FIX: Use type assertion for custom fields
+                const user = data.user as any;
 
                 // ✅ Fetch user details including meters
                 let meters: string[] = [];

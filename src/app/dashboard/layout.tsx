@@ -48,11 +48,13 @@ export default function DashboardLayout({
                     router.push('/login');
                     return;
                 }
-                setUser(data.user);
+                // ✅ FIX: Use type assertion for custom fields
+                const userData = data.user as any;
+                setUser(userData);
 
                 // ✅ 1. If user goes to /dashboard, redirect to role-specific dashboard
                 if (pathname === '/dashboard') {
-                    const redirectPath = roleDashboardMap[data.user.role] || '/dashboard/consumer';
+                    const redirectPath = roleDashboardMap[userData.role] || '/dashboard/consumer';
                     router.push(redirectPath);
                     return;
                 }
@@ -68,7 +70,7 @@ export default function DashboardLayout({
                 const matchedRoles = matchingRoute ? roleAccessMap[matchingRoute] : allowedRoles;
 
                 // If user role is not allowed, redirect to access denied
-                if (matchedRoles.length > 0 && !matchedRoles.includes(data.user.role)) {
+                if (matchedRoles.length > 0 && !matchedRoles.includes(userData.role)) {
                     router.push('/access-denied');
                     return;
                 }
@@ -78,7 +80,7 @@ export default function DashboardLayout({
                     pathname.startsWith(`/dashboard/${role}`)
                 );
 
-                if (dashboardMatch && dashboardMatch !== data.user.role) {
+                if (dashboardMatch && dashboardMatch !== userData.role) {
                     // User is trying to access another role's dashboard
                     router.push('/access-denied');
                     return;

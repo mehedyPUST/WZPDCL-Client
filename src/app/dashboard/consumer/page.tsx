@@ -101,10 +101,12 @@ export default function ConsumerDashboardPage() {
                     router.push('/login');
                     return;
                 }
-                setUser(data.user);
+                // ✅ FIX: Use type assertion for custom fields
+                const userData = data.user as any;
+                setUser(userData);
 
                 const token = localStorage.getItem('auth_token');
-                const userId = data.user?.id;
+                const userId = userData?.id;
 
                 if (!userId) {
                     setError('User ID not found');
@@ -140,7 +142,7 @@ export default function ConsumerDashboardPage() {
                     meterError = error instanceof Error ? error.message : 'Network error';
                 }
 
-                const meterNo = data.user?.meterNo || (meters.length > 0 ? meters[0]?.meterNo : null);
+                const meterNo = userData?.meterNo || (meters.length > 0 ? meters[0]?.meterNo : null);
 
                 // ✅ Fetch bills
                 let billsData = [];
@@ -208,7 +210,7 @@ export default function ConsumerDashboardPage() {
                     currentBill: currentUnpaid ? `৳${currentUnpaid.totalAmount.toLocaleString()}` : '৳0',
                     dueDate: currentUnpaid?.dueDate || 'No due bill',
                     complaints: complaintsCount,
-                    meterStatus: data.user?.isActive ? 'Active' : 'Inactive',
+                    meterStatus: userData?.isActive ? 'Active' : 'Inactive',
                     totalBills: billsData.length,
                     totalPaid: totalPaid,
                     metersCount: meters.length,

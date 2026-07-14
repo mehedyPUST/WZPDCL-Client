@@ -1,3 +1,4 @@
+// app/dashboard/billing_wings/all-consumers/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -63,7 +64,9 @@ interface Consumer {
     isClaimed?: boolean;
     isRegistered?: boolean;
     claimedBy?: string;
+    claimedAt?: string;
     registeredBy?: string;
+    registeredAt?: string;
     status?: string;
     hasMeter?: boolean;
     userId?: string;
@@ -131,7 +134,6 @@ export default function BillingWingsAllConsumersPage() {
         try {
             const token = localStorage.getItem('auth_token');
 
-            // ✅ Fetch consumers from API
             const response = await fetch(
                 `${API_URL}/api/billing/consumers/all`,
                 {
@@ -173,12 +175,10 @@ export default function BillingWingsAllConsumersPage() {
                     return;
                 }
 
-                // ✅ Process consumers with billing summary
                 const processedConsumers = await Promise.all(
                     consumersData.map(async (consumer: any) => {
                         let billingSummary = { totalBills: 0, totalPaid: 0, totalDue: 0, lastPaymentDate: null };
 
-                        // ✅ Fetch billing summary for each consumer
                         try {
                             const consumerId = consumer._id || consumer.id;
                             if (consumerId) {
@@ -229,7 +229,9 @@ export default function BillingWingsAllConsumersPage() {
                             isClaimed: consumer.isClaimed || false,
                             isRegistered: consumer.isRegistered || false,
                             claimedBy: consumer.claimedBy || null,
+                            claimedAt: consumer.claimedAt || null,
                             registeredBy: consumer.registeredBy || null,
+                            registeredAt: consumer.registeredAt || null,
                             userId: consumer.userId || null,
                             hasMeter: hasMeter,
                             status: consumer.isRegistered ? 'Registered' :
@@ -798,7 +800,9 @@ export default function BillingWingsAllConsumersPage() {
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-500">Claimed At</p>
-                                        <p className="text-sm font-medium">{selectedConsumer.claimedAt ? new Date(selectedConsumer.claimedAt).toLocaleString() : 'N/A'}</p>
+                                        <p className="text-sm font-medium">
+                                            {selectedConsumer.claimedAt ? new Date(selectedConsumer.claimedAt).toLocaleString() : 'N/A'}
+                                        </p>
                                     </div>
                                 </>
                             )}
@@ -810,7 +814,9 @@ export default function BillingWingsAllConsumersPage() {
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-500">Registered At</p>
-                                        <p className="text-sm font-medium">{selectedConsumer.registeredAt ? new Date(selectedConsumer.registeredAt).toLocaleString() : 'N/A'}</p>
+                                        <p className="text-sm font-medium">
+                                            {selectedConsumer.registeredAt ? new Date(selectedConsumer.registeredAt).toLocaleString() : 'N/A'}
+                                        </p>
                                     </div>
                                 </>
                             )}

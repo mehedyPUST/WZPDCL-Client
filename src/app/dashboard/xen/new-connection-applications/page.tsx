@@ -92,8 +92,8 @@ const StatCard = ({ title, value, icon, bgColor, change, trend }: StatCardProps)
                 <p className="text-2xl font-bold text-gray-800 mt-1">{value}</p>
                 {change && (
                     <p className={`text-xs flex items-center mt-1 ${trend === 'up' ? 'text-green-600' :
-                            trend === 'down' ? 'text-red-600' :
-                                'text-gray-500'
+                        trend === 'down' ? 'text-red-600' :
+                            'text-gray-500'
                         }`}>
                         {trend === 'up' && <TrendingUp size={14} className="mr-1" />}
                         {trend === 'down' && <TrendingDown size={14} className="mr-1" />}
@@ -139,7 +139,9 @@ export default function XenNewConnectionApplicationsPage() {
         const getUser = async () => {
             try {
                 const { data } = await authClient.getSession();
-                setUser(data?.user || null);
+                // ✅ FIX: Use type assertion for custom fields
+                const userData = data?.user as any;
+                setUser(userData || null);
             } catch (error) {
                 console.error('Error fetching user:', error);
             }
@@ -191,7 +193,8 @@ export default function XenNewConnectionApplicationsPage() {
             const approved = filteredApps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
             const rejected = filteredApps.filter((a: ConnectionApplication) => a.status === 'rejected').length;
             const implemented = filteredApps.filter((a: ConnectionApplication) => a.status === 'implemented').length;
-            const totalAmount = filteredApps.reduce((sum, a) => sum + a.feeAmount, 0);
+            // ✅ FIX: Explicitly type the reduce parameters
+            const totalAmount = filteredApps.reduce((sum: number, a: ConnectionApplication) => sum + a.feeAmount, 0);
 
             setStats({
                 total,
@@ -212,7 +215,8 @@ export default function XenNewConnectionApplicationsPage() {
             const approved = mockApps.filter((a: ConnectionApplication) => a.status === 'forwarded_to_wing').length;
             const rejected = mockApps.filter((a: ConnectionApplication) => a.status === 'rejected').length;
             const implemented = mockApps.filter((a: ConnectionApplication) => a.status === 'implemented').length;
-            const totalAmount = mockApps.reduce((sum, a) => sum + a.feeAmount, 0);
+            // ✅ FIX: Explicitly type the reduce parameters
+            const totalAmount = mockApps.reduce((sum: number, a: ConnectionApplication) => sum + a.feeAmount, 0);
 
             setStats({
                 total,
@@ -691,8 +695,8 @@ export default function XenNewConnectionApplicationsPage() {
                                     key={page}
                                     onClick={() => setCurrentPage(page)}
                                     className={`px-3 py-1 rounded-lg text-sm transition-colors ${currentPage === page
-                                            ? 'bg-emerald-600 text-white'
-                                            : 'border border-gray-200 hover:bg-gray-50'
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'border border-gray-200 hover:bg-gray-50'
                                         }`}
                                 >
                                     {page}
@@ -922,8 +926,8 @@ export default function XenNewConnectionApplicationsPage() {
                                 onClick={submitReview}
                                 disabled={isSubmitting}
                                 className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${reviewAction === 'approve'
-                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                        : 'bg-red-600 hover:bg-red-700 text-white'
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                    : 'bg-red-600 hover:bg-red-700 text-white'
                                     } ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                             >
                                 {isSubmitting ? (

@@ -673,7 +673,8 @@ export default function AdminSettingsPage() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="flex overflow-x-auto border-b border-gray-100">
                     {sections.map((section) => {
-                        const Icon = section.icon.type;
+                        // ✅ FIX: Check if icon exists before accessing type
+                        const IconComponent = section.icon ? (section.icon as any).type : null;
                         return (
                             <button
                                 key={section.id}

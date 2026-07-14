@@ -32,7 +32,7 @@ const LoginForm = () => {
     });
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     useEffect(() => {
         const error = searchParams.get('error');
@@ -82,6 +82,7 @@ const LoginForm = () => {
         return Object.keys(newErrors).length === 0;
     };
 
+    // app/(auth)/login/page.tsx - handleSubmit function
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -94,10 +95,13 @@ const LoginForm = () => {
             console.log('🔍 Attempting login...');
             console.log('📧 Email:', formData.email);
 
-            // ✅ Use authClient for Better Auth login
+            // ✅ Login with credentials
             const result = await authClient.signIn.email({
                 email: formData.email,
                 password: formData.password,
+                fetchOptions: {
+                    credentials: 'include',
+                },
             });
 
             console.log('📦 Login result:', result);
@@ -109,16 +113,36 @@ const LoginForm = () => {
 
             console.log('✅ Login successful!');
 
-            // ✅ Check if session exists
-            const session = await authClient.getSession();
+            // ✅ Wait a moment for session to be set
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // ✅ Get session with credentials
+            const session = await authClient.getSession({
+                fetchOptions: {
+                    credentials: 'include',
+                },
+            });
+
             console.log('📦 Session after login:', session);
 
             if (session.data) {
                 console.log('✅ Session found, redirecting to dashboard');
-                router.push('/');
+                router.push('/dashboard');
             } else {
                 console.log('⚠️ No session found after login');
-                throw new Error('Session not established');
+
+                // ✅ Try to get session one more time
+                const sessionRetry = await authClient.getSession({
+                    fetchOptions: {
+                        credentials: 'include',
+                    },
+                });
+
+                if (sessionRetry.data) {
+                    router.push('/dashboard');
+                } else {
+                    throw new Error('Session not established');
+                }
             }
 
         } catch (error: any) {
@@ -138,7 +162,10 @@ const LoginForm = () => {
         try {
             await authClient.signIn.social({
                 provider: 'google',
-                callbackURL: '/', // লগইন সফল হলে যেখানে রিডাইরেক্ট করবে
+                callbackURL: '/dashboard', // লগইন সফল হলে যেখানে রিডাইরেক্ট করবে
+                fetchOptions: {
+                    credentials: 'include',
+                },
             });
         } catch (error) {
             console.error('❌ Google sign in error:', error);

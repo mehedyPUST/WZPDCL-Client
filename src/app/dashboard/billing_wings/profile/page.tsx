@@ -96,7 +96,8 @@ export default function ProfilePage() {
                     return;
                 }
 
-                const user = data.user;
+                // ✅ FIX: Use type assertion for custom fields
+                const user = data.user as any;
                 setProfile({
                     id: user.id || '',
                     name: user.name || '',

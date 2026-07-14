@@ -1,14 +1,8 @@
 // app/layout.tsx
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
+'use client';
 
-const inter = Inter({ subsets: ['latin'] });
-
-export const metadata: Metadata = {
-  title: 'WZPDCL - Power Distribution System',
-  description: 'West Zone Power Distribution Company Limited',
-};
+import { AuthClientProvider } from 'better-auth/react';
+import { authClient } from '@/lib/auth-client';
 
 export default function RootLayout({
   children,
@@ -17,8 +11,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        {children}
+      <body>
+        <AuthClientProvider client={authClient}>
+          {children}
+        </AuthClientProvider>
       </body>
     </html>
   );

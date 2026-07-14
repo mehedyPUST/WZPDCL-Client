@@ -103,25 +103,31 @@ export default function AdminProfilePage() {
                     return;
                 }
                 if (data?.user) {
+                    // ✅ FIX: Use type assertion for custom fields
+                    const userData = data.user as any;
                     setSession(data);
-                    setUser(data.user);
-                    setUserId(data.user.id || data.user._id);
+                    setUser(userData);
+
+                    // ✅ Use id directly (not _id)
+                    const userId = userData.id || '';
+                    setUserId(userId);
+
                     setProfile({
-                        id: data.user.id || data.user._id,
-                        name: data.user.name || '',
-                        email: data.user.email || '',
-                        mobile: data.user.mobile || '',
-                        nidNo: data.user.nidNo || '',
-                        feederName: data.user.feederName || '',
-                        meterNo: data.user.meterNo || '',
-                        role: data.user.role || 'consumer',
-                        address: data.user.address || '',
-                        isActive: data.user.isActive !== undefined ? data.user.isActive : true,
-                        createdAt: data.user.createdAt || new Date().toISOString(),
-                        updatedAt: data.user.updatedAt || new Date().toISOString(),
-                        meters: data.user.meters || [],
-                        claimedMeters: data.user.claimedMeters || [],
-                        profileImage: data.user.profileImage || '',
+                        id: userId,
+                        name: userData.name || '',
+                        email: userData.email || '',
+                        mobile: userData.mobile || '',
+                        nidNo: userData.nidNo || '',
+                        feederName: userData.feederName || '',
+                        meterNo: userData.meterNo || '',
+                        role: userData.role || 'consumer',
+                        address: userData.address || '',
+                        isActive: userData.isActive !== undefined ? userData.isActive : true,
+                        createdAt: userData.createdAt || new Date().toISOString(),
+                        updatedAt: userData.updatedAt || new Date().toISOString(),
+                        meters: userData.meters || [],
+                        claimedMeters: userData.claimedMeters || [],
+                        profileImage: userData.profileImage || '',
                     });
                 } else {
                     router.push('/auth/sign-in');

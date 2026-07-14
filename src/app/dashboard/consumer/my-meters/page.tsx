@@ -117,10 +117,19 @@ export default function MyMetersPage() {
                     router.push('/login');
                     return;
                 }
-                setUser(data.user);
-                setPrimaryMeter(data.user.meterNo || '');
+                // ✅ FIX: Use type assertion for custom fields
+                const userData = data.user as any;
+                setUser({
+                    id: userData.id || '',
+                    name: userData.name || '',
+                    email: userData.email || '',
+                    meterNo: userData.meterNo || '',
+                    meters: userData.meters || [],
+                    claimedMeters: userData.claimedMeters || [],
+                });
+                setPrimaryMeter(userData.meterNo || '');
 
-                await fetchMeters(data.user.id);
+                await fetchMeters(userData.id);
             } catch (error: any) {
                 console.error('Error fetching meters:', error);
                 setError(error.message || 'Failed to load meters');
@@ -595,8 +604,8 @@ export default function MyMetersPage() {
                             >
                                 {/* Meter Header */}
                                 <div className={`px-4 py-3 text-white ${isPrimary
-                                        ? 'bg-gradient-to-r from-yellow-500 to-yellow-600'
-                                        : 'bg-gradient-to-r from-emerald-600 to-emerald-700'
+                                    ? 'bg-gradient-to-r from-yellow-500 to-yellow-600'
+                                    : 'bg-gradient-to-r from-emerald-600 to-emerald-700'
                                     }`}>
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center space-x-2">
