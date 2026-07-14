@@ -110,7 +110,7 @@ const LoginForm = () => {
             await new Promise(resolve => setTimeout(resolve, 2000));
 
             // Redirect to dashboard
-            router.push('/');
+            router.push('/dashboard'); // ✅ পরিবর্তন করুন: '/' থেকে '/dashboard'
 
         } catch (error: any) {
             console.error('❌ Login failed:', error);
