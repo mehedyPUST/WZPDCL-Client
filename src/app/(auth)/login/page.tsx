@@ -92,7 +92,6 @@ const LoginForm = () => {
             console.log('🔍 Attempting login...');
             console.log('📧 Email:', formData.email);
 
-            // ✅ Login with Better Auth
             const result = await authClient.signIn.email({
                 email: formData.email,
                 password: formData.password,
@@ -107,11 +106,11 @@ const LoginForm = () => {
 
             console.log('✅ Login successful!');
 
-            // ✅ Wait for session cookie to be set
+            // Wait for session cookie to be set
             await new Promise(resolve => setTimeout(resolve, 2000));
 
-            // ✅ Redirect to dashboard
-            router.push('/dashboard');
+            // Redirect to dashboard
+            router.push('/');
 
         } catch (error: any) {
             console.error('❌ Login failed:', error);
@@ -129,7 +128,7 @@ const LoginForm = () => {
         try {
             await authClient.signIn.social({
                 provider: 'google',
-                callbackURL: '/dashboard',
+                callbackURL: '/',
             });
         } catch (error) {
             console.error('❌ Google sign in error:', error);
@@ -235,8 +234,8 @@ const LoginForm = () => {
                         </div>
                     </div>
 
-                    {/* Remember Me & Forgot Password */}
-                    <div className="flex items-center justify-between">
+                    {/* Remember Me - Removed Forgot Password */}
+                    <div className="flex items-center">
                         <label className="flex items-center space-x-2 cursor-pointer">
                             <input
                                 type="checkbox"
@@ -247,9 +246,6 @@ const LoginForm = () => {
                             />
                             <span className="text-sm text-gray-600">Remember me</span>
                         </label>
-                        <Link href="/forgot-password" className="text-sm text-emerald-600 hover:text-emerald-700 font-medium">
-                            Forgot password?
-                        </Link>
                     </div>
 
                     {/* Submit Button */}

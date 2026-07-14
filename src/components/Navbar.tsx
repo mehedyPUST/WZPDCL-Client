@@ -88,45 +88,9 @@ const Navbar = () => {
         return paths[role] || '/dashboard/consumer';
     };
 
+    // ✅ Remove all links that don't exist - keep only home, login, register, dashboard
     const navItems: NavItem[] = [
         { id: 'home', label: 'Home', href: '/', icon: Home },
-        {
-            id: 'services',
-            label: 'Services',
-            href: '#services',
-            icon: Zap,
-            children: [
-                { id: 'services-bill', label: 'Bill Payment', href: '/consumer/bills', icon: CreditCard },
-                { id: 'services-new-connection', label: 'New Connection', href: '/consumer/new-connection', icon: PlusCircle },
-                { id: 'services-complaint', label: 'Report Complaint', href: '/consumer/complaints', icon: AlertCircle },
-                { id: 'services-track', label: 'Track Complaint', href: '/consumer/complaints/track', icon: Clock },
-            ]
-        },
-        {
-            id: 'consumer',
-            label: 'Consumer',
-            href: '#consumer',
-            icon: Users,
-            children: [
-                { id: 'consumer-bills', label: 'My Bills', href: '/consumer/bills', icon: FileText },
-                { id: 'consumer-complaints', label: 'My Complaints', href: '/consumer/complaints', icon: MessageSquare },
-                { id: 'consumer-profile', label: 'Profile', href: '/dashboard/profile', icon: User },
-                { id: 'consumer-new-connection', label: 'New Connection', href: '/consumer/new-connection', icon: PlusCircle },
-            ]
-        },
-        {
-            id: 'substations',
-            label: 'Substations',
-            href: '#substations',
-            icon: MapPin,
-            children: [
-                { id: 'substations-all', label: 'All Substations', href: '/substations', icon: MapPin },
-                { id: 'substations-grid', label: 'Grid Stations', href: '/substations/grid', icon: BarChart3 },
-                { id: 'substations-distribution', label: 'Distribution', href: '/substations/distribution', icon: Zap },
-            ]
-        },
-        { id: 'about', label: 'About', href: '/about', icon: Info },
-        { id: 'contact', label: 'Contact', href: '/contact', icon: Mail },
     ];
 
     const getRoleDisplay = (role: string) => {
@@ -179,60 +143,18 @@ const Navbar = () => {
                     <div className="hidden md:flex items-center space-x-1">
                         {navItems.map((item) => {
                             const Icon = item.icon;
-                            const hasChildren = item.children && item.children.length > 0;
-
                             return (
-                                <div key={item.id} className="relative group">
-                                    {hasChildren ? (
-                                        <button
-                                            onClick={() => setDropdownOpen(dropdownOpen === item.id ? null : item.id)}
-                                            className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${isActive(item.href)
-                                                    ? 'bg-emerald-800'
-                                                    : 'hover:bg-emerald-600'
-                                                }`}
-                                        >
-                                            {Icon && <Icon size={18} />}
-                                            <span>{item.label}</span>
-                                            <ChevronDown size={16} />
-                                        </button>
-                                    ) : (
-                                        <Link
-                                            href={item.href}
-                                            className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${isActive(item.href)
-                                                    ? 'bg-emerald-800'
-                                                    : 'hover:bg-emerald-600'
-                                                }`}
-                                        >
-                                            {Icon && <Icon size={18} />}
-                                            <span>{item.label}</span>
-                                        </Link>
-                                    )}
-
-                                    {/* Dropdown */}
-                                    {hasChildren && item.children && (
-                                        <div
-                                            className={`absolute left-0 mt-1 w-56 bg-white rounded-lg shadow-xl py-2 text-gray-700 transition-all duration-200 ${dropdownOpen === item.id
-                                                    ? 'opacity-100 visible'
-                                                    : 'opacity-0 invisible pointer-events-none'
-                                                }`}
-                                        >
-                                            {item.children.map((child) => {
-                                                const ChildIcon = child.icon;
-                                                return (
-                                                    <Link
-                                                        key={child.id}
-                                                        href={child.href}
-                                                        className="flex items-center space-x-2 px-4 py-2.5 text-sm hover:bg-gray-100 transition-colors"
-                                                        onClick={() => setDropdownOpen(null)}
-                                                    >
-                                                        {ChildIcon && <ChildIcon size={16} className="text-gray-400" />}
-                                                        <span>{child.label}</span>
-                                                    </Link>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
+                                <Link
+                                    key={item.id}
+                                    href={item.href}
+                                    className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${isActive(item.href)
+                                            ? 'bg-emerald-800'
+                                            : 'hover:bg-emerald-600'
+                                        }`}
+                                >
+                                    {Icon && <Icon size={18} />}
+                                    <span>{item.label}</span>
+                                </Link>
                             );
                         })}
                     </div>
@@ -297,56 +219,17 @@ const Navbar = () => {
                     <div className="md:hidden py-4 border-t border-emerald-600 space-y-2">
                         {navItems.map((item) => {
                             const Icon = item.icon;
-                            const hasChildren = item.children && item.children.length > 0;
-
                             return (
-                                <div key={item.id}>
-                                    {hasChildren ? (
-                                        <>
-                                            <button
-                                                onClick={() => setDropdownOpen(dropdownOpen === item.id ? null : item.id)}
-                                                className="flex items-center justify-between w-full px-4 py-3 rounded-lg hover:bg-emerald-600 transition-colors"
-                                            >
-                                                <div className="flex items-center space-x-2">
-                                                    {Icon && <Icon size={18} />}
-                                                    <span>{item.label}</span>
-                                                </div>
-                                                <ChevronDown size={16} />
-                                            </button>
-                                            {dropdownOpen === item.id && item.children && (
-                                                <div className="ml-6 space-y-1">
-                                                    {item.children.map((child) => {
-                                                        const ChildIcon = child.icon;
-                                                        return (
-                                                            <Link
-                                                                key={child.id}
-                                                                href={child.href}
-                                                                onClick={() => {
-                                                                    setIsOpen(false);
-                                                                    setDropdownOpen(null);
-                                                                }}
-                                                                className="flex items-center space-x-2 px-4 py-2.5 text-sm hover:bg-emerald-600 rounded-lg transition-colors"
-                                                            >
-                                                                {ChildIcon && <ChildIcon size={16} />}
-                                                                <span>{child.label}</span>
-                                                            </Link>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <Link
-                                            href={item.href}
-                                            onClick={() => setIsOpen(false)}
-                                            className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-colors ${isActive(item.href) ? 'bg-emerald-800' : 'hover:bg-emerald-600'
-                                                }`}
-                                        >
-                                            {Icon && <Icon size={18} />}
-                                            <span>{item.label}</span>
-                                        </Link>
-                                    )}
-                                </div>
+                                <Link
+                                    key={item.id}
+                                    href={item.href}
+                                    onClick={() => setIsOpen(false)}
+                                    className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-colors ${isActive(item.href) ? 'bg-emerald-800' : 'hover:bg-emerald-600'
+                                        }`}
+                                >
+                                    {Icon && <Icon size={18} />}
+                                    <span>{item.label}</span>
+                                </Link>
                             );
                         })}
 
