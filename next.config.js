@@ -1,4 +1,3 @@
-// next.config.js
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     images: {
@@ -9,16 +8,14 @@ const nextConfig = {
                 port: '',
                 pathname: '/**',
             },
-            {
-                protocol: 'https',
-                hostname: 'i.ibb.co',
-                port: '',
-                pathname: '/**',
-            },
         ],
     },
     async rewrites() {
         return [
+            {
+                source: '/api/auth/:path*',
+                destination: 'https://wzpdcl-server.vercel.app/api/auth/:path*',
+            },
             {
                 source: '/api/:path*',
                 destination: 'https://wzpdcl-server.vercel.app/api/:path*',
