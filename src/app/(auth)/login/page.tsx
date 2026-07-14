@@ -110,7 +110,7 @@ const LoginForm = () => {
             await new Promise(resolve => setTimeout(resolve, 2000));
 
             // Redirect to dashboard
-            router.push('/dashboard');
+            router.push('/');
 
         } catch (error: any) {
             console.error('❌ Login failed:', error);
@@ -128,7 +128,7 @@ const LoginForm = () => {
         try {
             await authClient.signIn.social({
                 provider: 'google',
-                callbackURL: '/dashboard',
+                callbackURL: '/',
             });
         } catch (error) {
             console.error('❌ Google sign in error:', error);
