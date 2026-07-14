@@ -104,7 +104,7 @@ export default function ComplaintManagerDashboardPage() {
     const [user, setUser] = useState<any>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     useEffect(() => {
         const getUser = async () => {

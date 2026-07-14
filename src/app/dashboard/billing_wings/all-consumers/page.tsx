@@ -107,7 +107,7 @@ export default function BillingWingsAllConsumersPage() {
     const [user, setUser] = useState<any>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
     const ITEMS_PER_PAGE = 10;
 
     useEffect(() => {

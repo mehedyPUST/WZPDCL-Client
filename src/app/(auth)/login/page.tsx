@@ -83,19 +83,12 @@ const LoginForm = () => {
     };
 
     // app/(auth)/login/page.tsx - handleSubmit function
+    // app/(auth)/login/page.tsx - handleSubmit
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        if (!validateForm()) return;
-
         setLoading(true);
-        setErrors({});
 
         try {
-            console.log('🔍 Attempting login...');
-            console.log('📧 Email:', formData.email);
-
-            // ✅ Login with credentials
             const result = await authClient.signIn.email({
                 email: formData.email,
                 password: formData.password,
@@ -104,17 +97,14 @@ const LoginForm = () => {
                 },
             });
 
-            console.log('📦 Login result:', result);
-
             if (result.error) {
-                console.error('❌ Login error:', result.error);
-                throw new Error(result.error.message || 'Login failed');
+                throw new Error(result.error.message);
             }
 
             console.log('✅ Login successful!');
 
-            // ✅ Wait a moment for session to be set
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // ✅ Wait for session to be set
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             // ✅ Get session with credentials
             const session = await authClient.getSession({
@@ -125,20 +115,18 @@ const LoginForm = () => {
 
             console.log('📦 Session after login:', session);
 
-            if (session.data) {
-                console.log('✅ Session found, redirecting to dashboard');
+            if (session?.data) {
                 router.push('/dashboard');
             } else {
-                console.log('⚠️ No session found after login');
-
-                // ✅ Try to get session one more time
+                // ✅ Try one more time
+                await new Promise(resolve => setTimeout(resolve, 500));
                 const sessionRetry = await authClient.getSession({
                     fetchOptions: {
                         credentials: 'include',
                     },
                 });
 
-                if (sessionRetry.data) {
+                if (sessionRetry?.data) {
                     router.push('/dashboard');
                 } else {
                     throw new Error('Session not established');
@@ -147,15 +135,11 @@ const LoginForm = () => {
 
         } catch (error: any) {
             console.error('❌ Login failed:', error);
-            setErrors((prev) => ({
-                ...prev,
-                email: error.message || 'Invalid email or password. Please try again.',
-            }));
+            setErrors({ email: error.message || 'Login failed' });
         } finally {
             setLoading(false);
         }
     };
-
     // ✅ Updated Google Sign-In using Better Auth Client
     const handleGoogleSignIn = async () => {
         setGoogleLoading(true);

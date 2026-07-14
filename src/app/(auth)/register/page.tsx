@@ -81,7 +81,7 @@ export default function RegisterPage() {
 
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     // ✅ Check field uniqueness (Email, Mobile, NID)
     const checkFieldUniqueness = async (field: string, value: string) => {
@@ -496,9 +496,9 @@ export default function RegisterPage() {
                                 value={formData.email}
                                 onChange={handleChange}
                                 className={`w-full pl-10 pr-10 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.email ? 'border-red-500' :
-                                        fieldValid.email === true ? 'border-green-500 bg-green-50' :
-                                            fieldValid.email === false ? 'border-red-500 bg-red-50' :
-                                                'border-gray-200'
+                                    fieldValid.email === true ? 'border-green-500 bg-green-50' :
+                                        fieldValid.email === false ? 'border-red-500 bg-red-50' :
+                                            'border-gray-200'
                                     }`}
                                 placeholder="you@example.com"
                             />
@@ -536,9 +536,9 @@ export default function RegisterPage() {
                                 value={formData.mobile}
                                 onChange={handleChange}
                                 className={`w-full pl-10 pr-10 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.mobile ? 'border-red-500' :
-                                        fieldValid.mobile === true ? 'border-green-500 bg-green-50' :
-                                            fieldValid.mobile === false ? 'border-red-500 bg-red-50' :
-                                                'border-gray-200'
+                                    fieldValid.mobile === true ? 'border-green-500 bg-green-50' :
+                                        fieldValid.mobile === false ? 'border-red-500 bg-red-50' :
+                                            'border-gray-200'
                                     }`}
                                 placeholder="017XX-XXXXXX"
                             />
@@ -576,9 +576,9 @@ export default function RegisterPage() {
                                 value={formData.nidNo}
                                 onChange={handleChange}
                                 className={`w-full pl-10 pr-10 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.nidNo ? 'border-red-500' :
-                                        fieldValid.nidNo === true ? 'border-green-500 bg-green-50' :
-                                            fieldValid.nidNo === false ? 'border-red-500 bg-red-50' :
-                                                'border-gray-200'
+                                    fieldValid.nidNo === true ? 'border-green-500 bg-green-50' :
+                                        fieldValid.nidNo === false ? 'border-red-500 bg-red-50' :
+                                            'border-gray-200'
                                     }`}
                                 placeholder="12345678901234567"
                             />
@@ -760,8 +760,8 @@ export default function RegisterPage() {
                         type="submit"
                         disabled={loading || uploading || Object.values(fieldValid).some(v => v === false)}
                         className={`w-full py-2.5 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors ${loading || uploading || Object.values(fieldValid).some(v => v === false)
-                                ? 'bg-gray-400 cursor-not-allowed'
-                                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                             }`}
                     >
                         {loading ? (

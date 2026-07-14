@@ -180,7 +180,7 @@ export default function BillingWingsGenerateBillsPage() {
     });
     const [currentPage, setCurrentPage] = useState(1);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
     const ITEMS_PER_PAGE = 10;
 
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -936,8 +936,8 @@ export default function BillingWingsGenerateBillsPage() {
                                                     onClick={() => openBillModal(meter)}
                                                     disabled={isBillGenerated}
                                                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1 ${isBillGenerated
-                                                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                                            : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                                        : 'bg-emerald-600 text-white hover:bg-emerald-700'
                                                         }`}
                                                     title={isBillGenerated ? 'Bill already generated for this month' : 'Generate bill for this meter'}
                                                 >

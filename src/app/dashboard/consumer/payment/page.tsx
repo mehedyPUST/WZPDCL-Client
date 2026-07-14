@@ -54,7 +54,7 @@ export default function PaymentPage() {
     const [paymentSuccess, setPaymentSuccess] = useState(false);
     const [paymentError, setPaymentError] = useState<string | null>(null);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     useEffect(() => {
         // Check for payment status from URL
@@ -325,8 +325,8 @@ export default function PaymentPage() {
                     <div className="flex items-center justify-between py-2 border-b border-gray-50">
                         <span className="text-sm text-gray-600">Status</span>
                         <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${bill.status === 'paid' ? 'bg-green-100 text-green-700' :
-                                bill.status === 'unpaid' ? 'bg-red-100 text-red-700' :
-                                    'bg-yellow-100 text-yellow-700'
+                            bill.status === 'unpaid' ? 'bg-red-100 text-red-700' :
+                                'bg-yellow-100 text-yellow-700'
                             }`}>
                             {bill.status?.charAt(0).toUpperCase() + bill.status?.slice(1)}
                         </span>
@@ -351,8 +351,8 @@ export default function PaymentPage() {
                 <h2 className="text-sm font-medium text-gray-500 mb-4">Payment Method</h2>
                 <div className="space-y-3">
                     <div className={`flex items-center space-x-3 p-4 border-2 rounded-xl transition-all ${paymentMethod === 'card'
-                            ? 'border-emerald-500 bg-emerald-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-emerald-500 bg-emerald-50'
+                        : 'border-gray-200 hover:border-gray-300'
                         }`}>
                         <input
                             type="radio"
@@ -414,8 +414,8 @@ export default function PaymentPage() {
                     onClick={handlePayNow}
                     disabled={processing}
                     className={`w-full py-4 rounded-xl font-semibold text-white flex items-center justify-center space-x-2 transition-all ${processing
-                            ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 shadow-lg hover:shadow-emerald-200'
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 shadow-lg hover:shadow-emerald-200'
                         }`}
                 >
                     {processing ? (

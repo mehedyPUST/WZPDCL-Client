@@ -107,7 +107,7 @@ export default function AdminReportsPage() {
     const [reportTypes, setReportTypes] = useState<string[]>([]);
     const [reportData, setReportData] = useState<ReportData | null>(null);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
     const ITEMS_PER_PAGE = 9;
 
     // ✅ Fetch real report data from backend

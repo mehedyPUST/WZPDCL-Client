@@ -109,8 +109,8 @@ export async function middleware(request: NextRequest) {
             return NextResponse.next();
         }
 
-        // For protected API routes, check session
-        const sessionCookie = request.cookies.get('better-auth.session')?.value;
+        // ✅ FIX: Use correct cookie name - 'wzpdcl.session' instead of 'better-auth.session'
+        const sessionCookie = request.cookies.get('wzpdcl.session')?.value;  // ✅ Changed
 
         // If no session, return 401 Unauthorized (let the API handle it)
         if (!sessionCookie) {
@@ -134,7 +134,8 @@ export async function middleware(request: NextRequest) {
 
     // ✅ 4. For dashboard routes, validate session
     if (pathname.startsWith('/dashboard')) {
-        const sessionCookie = request.cookies.get('better-auth.session')?.value;
+        // ✅ FIX: Use correct cookie name - 'wzpdcl.session'
+        const sessionCookie = request.cookies.get('wzpdcl.session')?.value;  // ✅ Changed
 
         // If trying to access dashboard without session, redirect to login
         if (!sessionCookie) {
@@ -192,7 +193,8 @@ export async function middleware(request: NextRequest) {
 // Helper function to get user role from session
 async function getUserRoleFromSession(request: NextRequest): Promise<string | null> {
     try {
-        const sessionToken = request.cookies.get('better-auth.session')?.value;
+        // ✅ FIX: Use correct cookie name - 'wzpdcl.session'
+        const sessionToken = request.cookies.get('wzpdcl.session')?.value;  // ✅ Changed
 
         if (!sessionToken) {
             return null;

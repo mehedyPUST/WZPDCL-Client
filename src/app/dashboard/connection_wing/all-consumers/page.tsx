@@ -113,7 +113,7 @@ export default function ConnectionWingAllConsumersPage() {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [expandedConsumer, setExpandedConsumer] = useState<string | null>(null);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
     const ITEMS_PER_PAGE = 10;
 
     useEffect(() => {

@@ -98,7 +98,7 @@ export default function ConnectionWingAddMeterPage() {
 
     const [errors, setErrors] = useState<FormErrors>({});
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     useEffect(() => {
         const getUser = async () => {

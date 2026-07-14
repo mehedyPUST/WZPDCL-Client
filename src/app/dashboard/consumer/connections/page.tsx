@@ -131,7 +131,7 @@ export default function ConsumerConnectionsPage() {
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
     const ITEMS_PER_PAGE = 5;
 
     useEffect(() => {

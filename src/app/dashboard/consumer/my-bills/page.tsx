@@ -106,7 +106,7 @@ export default function MyBillsPage() {
     const [paymentError, setPaymentError] = useState<string | null>(null);
     const [paymentSuccess, setPaymentSuccess] = useState(false);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     // ✅ Check for payment status from URL
     useEffect(() => {

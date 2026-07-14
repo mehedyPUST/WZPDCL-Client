@@ -85,7 +85,7 @@ export default function ConsumerComplaintsPage() {
         address: '',
     });
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
     const ITEMS_PER_PAGE = 5;
 
     const categories = [
@@ -660,8 +660,8 @@ export default function ConsumerComplaintsPage() {
                                     type="submit"
                                     disabled={isSubmitting || meters.length === 0}
                                     className={`px-4 py-2 bg-emerald-600 text-white rounded-lg flex items-center space-x-2 transition-colors ${isSubmitting || meters.length === 0
-                                            ? 'opacity-70 cursor-not-allowed'
-                                            : 'hover:bg-emerald-700'
+                                        ? 'opacity-70 cursor-not-allowed'
+                                        : 'hover:bg-emerald-700'
                                         }`}
                                 >
                                     {isSubmitting ? (

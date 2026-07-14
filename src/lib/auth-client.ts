@@ -2,21 +2,13 @@
 import { createAuthClient } from 'better-auth/react';
 
 export const authClient = createAuthClient({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000',
+    baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://wzpdcl-server.vercel.app',
     basePath: '/api/auth',
-    // ✅ CRITICAL: Enable credentials for cookies
     fetchOptions: {
         credentials: 'include',
-        mode: 'cors',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        },
     },
-    // ✅ For production cookie handling
+    // ✅ Cookie prefix টা backend এর সাথে match করতে হবে
     cookies: {
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        domain: process.env.NODE_ENV === 'production' ? '.vercel.app' : undefined,
+        prefix: 'wzpdcl', // ✅ backend এ cookiePrefix: 'wzpdcl' দিয়েছেন
     },
 });

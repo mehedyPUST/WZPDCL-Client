@@ -91,7 +91,7 @@ export default function AdminProfilePage() {
     const [passwordErrors, setPasswordErrors] = useState<{ [key: string]: string }>({});
     const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     useEffect(() => {
         const fetchUser = async () => {

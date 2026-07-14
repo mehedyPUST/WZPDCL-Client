@@ -119,7 +119,7 @@ export default function ComplaintManagerAllPage() {
     });
     const [user, setUser] = useState<any>(null);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
     const ITEMS_PER_PAGE = 10;
 
     useEffect(() => {
@@ -532,8 +532,8 @@ export default function ComplaintManagerAllPage() {
                                     key={page}
                                     onClick={() => setCurrentPage(page)}
                                     className={`px-3 py-1 rounded-lg text-sm transition-colors ${currentPage === page
-                                            ? 'bg-emerald-600 text-white'
-                                            : 'border border-gray-200 hover:bg-gray-50'
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'border border-gray-200 hover:bg-gray-50'
                                         }`}
                                 >
                                     {page}

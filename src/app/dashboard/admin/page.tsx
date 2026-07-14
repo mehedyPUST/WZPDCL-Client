@@ -130,7 +130,7 @@ export default function AdminDashboardPage() {
         uptime: 'Unknown',
     });
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     // ✅ Currency formatter for BDT
     const formatBDT = (amount: number): string => {

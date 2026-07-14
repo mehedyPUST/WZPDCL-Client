@@ -72,8 +72,8 @@ const StatCard = ({ title, value, icon, bgColor, change, trend }: StatCardProps)
                 <p className="text-2xl font-bold text-gray-800 mt-1">{value}</p>
                 {change && (
                     <p className={`text-xs flex items-center mt-1 ${trend === 'up' ? 'text-green-600' :
-                            trend === 'down' ? 'text-red-600' :
-                                'text-gray-500'
+                        trend === 'down' ? 'text-red-600' :
+                            'text-gray-500'
                         }`}>
                         {trend === 'up' && <ArrowUpRight size={14} className="mr-1" />}
                         {trend === 'down' && <ArrowDownRight size={14} className="mr-1" />}
@@ -105,7 +105,7 @@ export default function XenSubstationsPage() {
         totalCapacity: 0,
     });
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
     const ITEMS_PER_PAGE = 6;
 
     useEffect(() => {
@@ -598,8 +598,8 @@ export default function XenSubstationsPage() {
                                 key={page}
                                 onClick={() => setCurrentPage(page)}
                                 className={`px-3 py-1 rounded-lg text-sm transition-colors ${currentPage === page
-                                        ? 'bg-emerald-600 text-white'
-                                        : 'border border-gray-200 hover:bg-gray-50'
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'border border-gray-200 hover:bg-gray-50'
                                     }`}
                             >
                                 {page}

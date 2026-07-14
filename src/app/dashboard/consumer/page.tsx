@@ -87,7 +87,7 @@ export default function ConsumerDashboardPage() {
     });
     const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     useEffect(() => {
         const fetchDashboardData = async () => {

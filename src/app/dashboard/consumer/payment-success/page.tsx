@@ -15,7 +15,7 @@ export default function PaymentSuccessPage() {
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState('Verifying payment...');
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     useEffect(() => {
         const verifyPayment = async () => {

@@ -106,7 +106,7 @@ export default function MyMetersPage() {
     // ✅ Set Primary Meter States
     const [settingPrimary, setSettingPrimary] = useState(false);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     useEffect(() => {
         const fetchData = async () => {

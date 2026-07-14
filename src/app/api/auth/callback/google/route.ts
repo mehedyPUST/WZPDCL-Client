@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(new URL('/login?error=missing_parameters', request.url));
     }
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
     try {
         console.log('📤 Forwarding to backend...');
