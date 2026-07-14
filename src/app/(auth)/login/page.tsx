@@ -128,7 +128,7 @@ const LoginForm = () => {
         try {
             await authClient.signIn.social({
                 provider: 'google',
-                callbackURL: '/',
+                callbackURL: 'https://wzpdcl-client.vercel.app',
             });
         } catch (error) {
             console.error('❌ Google sign in error:', error);
