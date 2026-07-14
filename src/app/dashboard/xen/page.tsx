@@ -125,7 +125,7 @@ export default function XenDashboardPage() {
     });
     const [user, setUser] = useState<any>(null);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL;
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://wzpdcl-server.vercel.app';
     const ITEMS_PER_PAGE = 5;
 
     useEffect(() => {
