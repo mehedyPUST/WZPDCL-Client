@@ -12,8 +12,17 @@ export default function DashboardRedirectPage() {
     useEffect(() => {
         const checkRole = async () => {
             try {
-                const { data } = await authClient.getSession();
+                // ✅ Add credentials: 'include' to get session
+                const { data } = await authClient.getSession({
+                    fetchOptions: {
+                        credentials: 'include',
+                    },
+                });
+
+                console.log('📦 Dashboard session check:', data);
+
                 if (!data) {
+                    console.log('❌ No session found, redirecting to login');
                     router.push('/login');
                     return;
                 }
@@ -32,6 +41,7 @@ export default function DashboardRedirectPage() {
                 };
 
                 const redirectPath = roleMap[userData.role] || '/dashboard/consumer';
+                console.log(`✅ Redirecting to: ${redirectPath}`);
                 router.push(redirectPath);
             } catch (error) {
                 console.error('Error:', error);

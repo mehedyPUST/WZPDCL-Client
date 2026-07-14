@@ -43,14 +43,25 @@ export default function DashboardLayout({
     useEffect(() => {
         const getUser = async () => {
             try {
-                const { data, error } = await authClient.getSession();
+                // ✅ Add credentials: 'include' to get session with cookies
+                const { data, error } = await authClient.getSession({
+                    fetchOptions: {
+                        credentials: 'include',
+                    },
+                });
+
+                console.log('📦 Dashboard Layout session:', data);
+
                 if (error || !data) {
+                    console.log('❌ No session, redirecting to login');
                     router.push('/login');
                     return;
                 }
+
                 // ✅ FIX: Use type assertion for custom fields
                 const userData = data.user as any;
                 setUser(userData);
+                console.log('✅ User set in layout:', userData);
 
                 // ✅ 1. If user goes to /dashboard, redirect to role-specific dashboard
                 if (pathname === '/dashboard') {
