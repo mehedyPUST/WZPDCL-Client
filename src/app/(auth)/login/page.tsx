@@ -32,8 +32,6 @@ const LoginForm = () => {
     });
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
     useEffect(() => {
         const error = searchParams.get('error');
         if (error) {
@@ -82,74 +80,56 @@ const LoginForm = () => {
         return Object.keys(newErrors).length === 0;
     };
 
-    // app/(auth)/login/page.tsx - handleSubmit function
-    // app/(auth)/login/page.tsx - handleSubmit
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!validateForm()) return;
+
         setLoading(true);
+        setErrors({});
 
         try {
+            console.log('🔍 Attempting login...');
+            console.log('📧 Email:', formData.email);
+
+            // ✅ Login with Better Auth
             const result = await authClient.signIn.email({
                 email: formData.email,
                 password: formData.password,
-                fetchOptions: {
-                    credentials: 'include',
-                },
             });
 
+            console.log('📦 Login result:', result);
+
             if (result.error) {
-                throw new Error(result.error.message);
+                console.error('❌ Login error:', result.error);
+                throw new Error(result.error.message || 'Login failed');
             }
 
             console.log('✅ Login successful!');
 
-            // ✅ Wait for session to be set
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // ✅ Wait for session cookie to be set
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
-            // ✅ Get session with credentials
-            const session = await authClient.getSession({
-                fetchOptions: {
-                    credentials: 'include',
-                },
-            });
-
-            console.log('📦 Session after login:', session);
-
-            if (session?.data) {
-                router.push('/dashboard');
-            } else {
-                // ✅ Try one more time
-                await new Promise(resolve => setTimeout(resolve, 500));
-                const sessionRetry = await authClient.getSession({
-                    fetchOptions: {
-                        credentials: 'include',
-                    },
-                });
-
-                if (sessionRetry?.data) {
-                    router.push('/dashboard');
-                } else {
-                    throw new Error('Session not established');
-                }
-            }
+            // ✅ Redirect to dashboard
+            router.push('/dashboard');
 
         } catch (error: any) {
             console.error('❌ Login failed:', error);
-            setErrors({ email: error.message || 'Login failed' });
+            setErrors({
+                email: error.message || 'Invalid email or password. Please try again.',
+            });
         } finally {
             setLoading(false);
         }
     };
-    // ✅ Updated Google Sign-In using Better Auth Client
+
+    // ✅ Google Sign-In
     const handleGoogleSignIn = async () => {
         setGoogleLoading(true);
         try {
             await authClient.signIn.social({
                 provider: 'google',
-                callbackURL: '/dashboard', // লগইন সফল হলে যেখানে রিডাইরেক্ট করবে
-                fetchOptions: {
-                    credentials: 'include',
-                },
+                callbackURL: '/dashboard',
             });
         } catch (error) {
             console.error('❌ Google sign in error:', error);
