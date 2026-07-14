@@ -10,18 +10,18 @@ const nextConfig = {
             },
         ],
     },
-    async rewrites() {
-        return [
-            {
-                source: '/api/auth/:path*',
-                destination: 'https://wzpdcl-server.vercel.app/api/auth/:path*',
-            },
-            {
-                source: '/api/:path*',
-                destination: 'https://wzpdcl-server.vercel.app/api/:path*',
-            },
-        ];
-    },
+  async rewrites() {
+    return [
+        {
+            source: '/api/auth/callback/google',
+            destination: 'https://wzpdcl-server.vercel.app/api/auth/callback/google',
+        },
+        {
+            source: '/api/:path*',
+            destination: 'https://wzpdcl-server.vercel.app/api/:path*',
+        },
+    ];
+},
 };
 
 module.exports = nextConfig;
